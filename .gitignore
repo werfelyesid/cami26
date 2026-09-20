@@ -1,0 +1,12 @@
+# Carpeta que Godot crea sola (no se sube al repositorio).
+.godot/
+# Archivos temporales.
+*.tmp
+# Exportaciones: no se suben (pesan mucho).
+build/
+export/
+# El archivo de exportación puede llevar contraseñas del keystore de Android.
+export_presets.cfg
+# Carpetas de Android/iOS generadas por Godot.
+android/
+ios/

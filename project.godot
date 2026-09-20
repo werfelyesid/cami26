@@ -1,0 +1,42 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="cami26"
+config/description="Fútbol 3D para jugar en el celular"
+run/main_scene="res://scenes/main_menu.tscn"
+config/features=PackedStringArray("4.6", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+Ajustes="*res://scripts/ajustes.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[physics]
+
+3d/default_gravity=16.0
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
