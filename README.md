@@ -40,17 +40,42 @@ El mouse funciona como si fuera el dedo, porque en `project.godot` está activad
 - Al **minuto 45 hay descanso** y el reloj se para **10 segundos**.
 - Si van **empatados al 90**, hay **tiempo extra hasta el 120**.
 - Y si siguen empatados... **¡8 rondas de penales!**
-  En los penales tú pateas (apunta con el joystick hacia arriba o abajo) y tu
-  arquero trata de atajar los del rival.
+  El penal se tira **desde el punto de penal** (a 11 m del arco), tú apuntas con
+  el joystick (arriba o abajo) y disparas con TIRO. El arquero **se queda clavado
+  en la línea hasta que pateas** (regla del fútbol de verdad) y recién ahí se
+  puede mover para atajar.
+
+Cada equipo juega con esta formación (16 jugadores):
+
+```
+                    ( 9 )  (13)          delanteros
+   (11)                               (7)   extremos izq. y der.
+             (10)                          enganche
+        (15)        (16)                    medio centro izq. y der.
+   (12)                    (14)              volantes
+              ( 8 )                          mediocentro
+   ( 3 )   ( 5 )   ( 6 )   ( 4 )   ( 2 )     5 defensas
+                    ( 1 )                     arquero
+```
 
 ## Los puestos y los números
 
 | Número | Puesto | Qué hace |
 |---|---|---|
-| **1** | Arquero | Usa las **manitas** (un tercio de su tamaño) para tapar el arco. Atrapa el balón y lo despeja. **No puede salir del área.** |
-| **2, 3, 4, 5, 6** | Defensas | Marcan a los atacantes rivales: se ponen entre el atacante y el arco, y **tapan los tiros** con el cuerpo. |
-| **7, 8, 10, 11, 15, 16** | Medios | Presionan al que tiene el balón y acompañan el ataque. |
-| **9, 12, 13, 14** | Delanteros | Van arriba a hacer los goles y se quedan listos para el contragolpe. |
+| **1** | Arquero | Usa las **manitas** (un tercio de su tamaño) para tapar el arco. **Sigue al balón siempre**: se para entre el balón y el arco, y si el balón se acerca sale un poco a tapar el ángulo. Atrapa el balón y lo despeja. **No puede salir del área.** |
+| **2, 3** | Laterales | El 2 por la derecha y el 3 por la izquierda. |
+| **4, 5** | Centrales | Marcan a los delanteros rivales. |
+| **6** | Líbero | El quinto defensor, queda atrás de los centrales. |
+| **8** | Mediocentro | El que corta el juego delante de los defensas. |
+| **15, 16** | Medio centro izq. y der. | Ayudan en el medio y acompañan el ataque. |
+| **12, 14** | Volantes | Corren por las bandas, un poco más atrasados. |
+| **10** | Enganche | El que arma el juego, va entre los medios y los delanteros. |
+| **7, 11** | Extremos | El 7 por la derecha y el 11 por la izquierda. Van a desbordar y centrar. |
+| **9, 13** | Delanteros | Los que van arriba a hacer los goles. |
+
+Los **defensas** se ponen entre el atacante rival y tu arco y **tapan los tiros**
+con el cuerpo. Los **medios** presionan al que tiene el balón y los **delanteros**
+buscan el arco rival.
 
 ---
 
@@ -94,7 +119,9 @@ cami26/
 ```
 
 ### Medidas de la cancha
-- Largo **100 m** (x de -50 a +50) y ancho **64 m** (y de -32 a +32). 1 unidad = 1 metro.
+- Largo **120 m** (x de -60 a +60) y ancho **76 m** (y de -38 a +38). 1 unidad = 1 metro.
+  (Es más grande que una cancha de verdad, de 105 x 68 m, para que quepan 32 jugadores
+  sin que se amontonen.)
 - Arco de **10 m** (el real mide 7,32 m). Es más ancho a propósito: como el balón y
   los jugadores son grandes, con un arco de 7,32 m el arquero taparía todo y no se
   podría meter ni un gol.
@@ -116,7 +143,7 @@ puede jugar cómodo sin que el balón salte para cualquier lado.
 
 | Quiero... | Archivo | Qué tocar |
 |---|---|---|
-| Que la cámara se acerque o se aleje | `scripts/partido.gd` | `ZOOM_ALTO` (30 = se ven 30 m de alto; más chico = más cerca) |
+| Que la cámara se acerque o se aleje | `scripts/partido.gd` | `ZOOM_ALTO` (36 = se ven 36 m de alto; más chico = más cerca) |
 | Que el partido dure más | `scripts/partido.gd` | `FIN_2T` (90 minutos) |
 | Que el descanso dure más | `scripts/partido.gd` | `SEGUNDOS_DESCANSO` |
 | Menos rondas de penales | `scripts/partido.gd` | `RONDAS_PENALES` |
@@ -159,8 +186,10 @@ no cabe entre el arquero y el palo y no se puede meter gol nunca.
    se veía muy "cuadrada" y para verse bien hacían falta modelos 3D.
    Está guardada en git: `git log` y busca el commit "primera version 3D".
 2. **Versión 2D, 1 contra 1** (más limpia y fácil de mejorar).
-3. **Versión 2D actual**: 16 contra 16, con puestos, números, arqueros con manitas,
-   cambio de jugador, descanso, tiempo extra y penales.
+3. **Versión 2D actual**: 16 contra 16, con puestos y números con sentido, arqueros
+   con manitas que atajan y siguen al balón, cambio de jugador, tapar pateadas,
+   descanso, tiempo extra y 8 rondas de penales (con el arquero quieto hasta
+   que pateen, como manda la regla).
 
 ---
 

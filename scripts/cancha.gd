@@ -12,10 +12,10 @@ extends Node2D
 ##   y = a lo ancho              (de -32 a +32, las bandas)
 ##   1 unidad = 1 metro
 
-const LARGO := 100.0
-const MITAD_LARGO := 50.0
-const ANCHO := 64.0
-const MITAD_ANCHO := 32.0
+const LARGO := 120.0
+const MITAD_LARGO := 60.0
+const ANCHO := 76.0
+const MITAD_ANCHO := 38.0
 const ANCHO_PORTERIA := 10.0
 const MITAD_PORTERIA := ANCHO_PORTERIA * 0.5
 const LARGO_RED := 2.6
@@ -53,28 +53,28 @@ func _draw() -> void:
 
 func _dibujar_alrededor() -> void:
 	# Verde exterior + gradas.
-	draw_rect(Rect2(-64.0, -45.0, 128.0, 90.0), VERDE_FUERA)
-	draw_rect(Rect2(-58.0, 34.0, 116.0, 8.0), Color(0.36, 0.37, 0.41))
-	draw_rect(Rect2(-58.0, -42.0, 116.0, 8.0), Color(0.36, 0.37, 0.41))
-	draw_rect(Rect2(-62.0, -34.0, 7.0, 68.0), Color(0.32, 0.33, 0.37))
-	draw_rect(Rect2(55.0, -34.0, 7.0, 68.0), Color(0.32, 0.33, 0.37))
+	draw_rect(Rect2(-76.0, -53.0, 152.0, 106.0), VERDE_FUERA)
+	draw_rect(Rect2(-70.0, 40.0, 140.0, 9.0), Color(0.36, 0.37, 0.41))
+	draw_rect(Rect2(-70.0, -49.0, 140.0, 9.0), Color(0.36, 0.37, 0.41))
+	draw_rect(Rect2(-74.0, -40.0, 8.0, 80.0), Color(0.32, 0.33, 0.37))
+	draw_rect(Rect2(66.0, -40.0, 8.0, 80.0), Color(0.32, 0.33, 0.37))
 
 	# La gente de las gradas (se dibuja una sola vez, no cuesta nada).
 	var azar := RandomNumberGenerator.new()
 	azar.seed = 20260920
-	for i in 1100:
+	for i in 1500:
 		var p := Vector2.ZERO
 		var zona := azar.randi_range(0, 3)
 		match zona:
 			0:
-				p = Vector2(azar.randf_range(-57.0, 57.0), azar.randf_range(34.5, 41.5))
+				p = Vector2(azar.randf_range(-69.0, 69.0), azar.randf_range(40.5, 48.5))
 			1:
-				p = Vector2(azar.randf_range(-57.0, 57.0), azar.randf_range(-41.5, -34.5))
+				p = Vector2(azar.randf_range(-69.0, 69.0), azar.randf_range(-48.5, -40.5))
 			2:
-				p = Vector2(azar.randf_range(-61.0, -55.5), azar.randf_range(-33.0, 33.0))
+				p = Vector2(azar.randf_range(-73.0, -66.5), azar.randf_range(-39.0, 39.0))
 			_:
-				p = Vector2(azar.randf_range(55.5, 61.0), azar.randf_range(-33.0, 33.0))
-		draw_circle(p, 0.36, _color_gente(azar))
+				p = Vector2(azar.randf_range(66.5, 73.0), azar.randf_range(-39.0, 39.0))
+		draw_circle(p, 0.38, _color_gente(azar))
 
 
 func _dibujar_cesped() -> void:

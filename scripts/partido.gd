@@ -41,35 +41,38 @@ const SEGUNDOS_DESCANSO := 10.0
 const RONDAS_PENALES := 8
 
 # --- La cancha (igual que en cancha.gd) ---
-const MITAD_LARGO := 50.0
-const MITAD_ANCHO := 32.0
+const MITAD_LARGO := 60.0
+const MITAD_ANCHO := 38.0
 const MITAD_PORTERIA := 5.0           # mitad del arco de 10 m
 const PUNTO_PENAL := 11.0
 const AREA_PROFUNDIDAD := 16.5
 const AREA_MITAD_ANCHO := 20.0
 
-const ZOOM_ALTO := 30.0               # cuántos metros se ven de alto
+const ZOOM_ALTO := 36.0               # cuántos metros se ven de alto
 const VELOCIDAD_MIA := 8.2
 const VELOCIDAD_COMPANERO := 7.2
 
 ## Los 16 puestos de tu equipo. Tu equipo ataca hacia la derecha (+x).
+## Es la formación que pidió Camilo: 1 arquero, 5 defensas, 6 medios
+## (mediocentro, medio centro izquierdo y derecho, extremos y volantes)
+## y 4 de ataque (extremo izquierdo, extremo derecho y 2 delanteros).
 const FORMACION := [
-	{"rol": ARQUERO, "num": 1, "pos": Vector2(-48.0, 0.0)},
-	{"rol": DEFENSA, "num": 2, "pos": Vector2(-32.0, -24.0)},
-	{"rol": DEFENSA, "num": 3, "pos": Vector2(-32.0, -12.0)},
-	{"rol": DEFENSA, "num": 4, "pos": Vector2(-32.0, 0.0)},
-	{"rol": DEFENSA, "num": 5, "pos": Vector2(-32.0, 12.0)},
-	{"rol": DEFENSA, "num": 6, "pos": Vector2(-32.0, 24.0)},
-	{"rol": MEDIO, "num": 7, "pos": Vector2(-10.0, -26.0)},
-	{"rol": MEDIO, "num": 8, "pos": Vector2(-10.0, -16.0)},
-	{"rol": MEDIO, "num": 10, "pos": Vector2(-10.0, -6.0)},
-	{"rol": MEDIO, "num": 11, "pos": Vector2(-10.0, 6.0)},
-	{"rol": MEDIO, "num": 15, "pos": Vector2(-10.0, 16.0)},
-	{"rol": MEDIO, "num": 16, "pos": Vector2(-10.0, 26.0)},
-	{"rol": DELANTERO, "num": 9, "pos": Vector2(6.0, -6.0)},
-	{"rol": DELANTERO, "num": 12, "pos": Vector2(6.0, 18.0)},
-	{"rol": DELANTERO, "num": 13, "pos": Vector2(6.0, 6.0)},
-	{"rol": DELANTERO, "num": 14, "pos": Vector2(6.0, -18.0)},
+	{"rol": ARQUERO, "num": 1, "pos": Vector2(-58.0, 0.0)},
+	{"rol": DEFENSA, "num": 2, "pos": Vector2(-42.0, -26.0)},
+	{"rol": DEFENSA, "num": 3, "pos": Vector2(-42.0, 26.0)},
+	{"rol": DEFENSA, "num": 4, "pos": Vector2(-47.0, -9.0)},
+	{"rol": DEFENSA, "num": 5, "pos": Vector2(-47.0, 9.0)},
+	{"rol": DEFENSA, "num": 6, "pos": Vector2(-52.0, 0.0)},
+	{"rol": MEDIO, "num": 8, "pos": Vector2(-26.0, 0.0)},
+	{"rol": MEDIO, "num": 15, "pos": Vector2(-16.0, -18.0)},
+	{"rol": MEDIO, "num": 16, "pos": Vector2(-16.0, 18.0)},
+	{"rol": MEDIO, "num": 12, "pos": Vector2(-30.0, -26.0)},
+	{"rol": MEDIO, "num": 14, "pos": Vector2(-30.0, 26.0)},
+	{"rol": MEDIO, "num": 10, "pos": Vector2(-4.0, 0.0)},
+	{"rol": DELANTERO, "num": 11, "pos": Vector2(20.0, -30.0)},
+	{"rol": DELANTERO, "num": 7, "pos": Vector2(20.0, 30.0)},
+	{"rol": DELANTERO, "num": 9, "pos": Vector2(26.0, -8.0)},
+	{"rol": DELANTERO, "num": 13, "pos": Vector2(26.0, 8.0)},
 ]
 
 var balon = null
@@ -351,7 +354,7 @@ func _marcar_dueno_del_balon() -> void:
 			mejor_distancia = d
 			mejor = f
 
-	if mejor_distancia > 3.2:
+	if mejor_distancia > 3.6:
 		mejor = null
 	dueno_balon = mejor
 
@@ -440,12 +443,13 @@ func _saque_de_centro() -> void:
 	balon.reiniciar(Vector2.ZERO)
 	dueno_balon = null
 	for f in futbolistas:
+		f.quieto = false
+		f.en_penal = false
 		f.visible = true
 		f.set_physics_process(true)
 		f.position = f.formacion
 		f.velocity = Vector2.ZERO
 		f.direccion = Vector2.ZERO
-		f.en_penal = false
 		f.controlado = false
 		f.puede_tocar = false
 	if controlado != null:
@@ -571,11 +575,12 @@ func _preparar_penal() -> void:
 	balon.reiniciar(punto)
 
 	for f in futbolistas:
+		f.quieto = false
+		f.en_penal = false
 		if f == tirador or f == arquero:
 			f.visible = true
 			f.set_physics_process(true)
 			f.puede_tocar = false
-			f.en_penal = false
 			f.direccion = Vector2.ZERO
 			f.velocity = Vector2.ZERO
 		else:
@@ -587,6 +592,9 @@ func _preparar_penal() -> void:
 	if arquero != null:
 		arquero.velocidad = 9.5
 		arquero.position = Vector2(signo * (MITAD_LARGO - 1.6), 0.0)
+		# La regla del penal: el arquero se queda clavado en la línea
+		# hasta que el otro patee. Recién ahí se puede mover.
+		arquero.quieto = true
 
 	if tirador != null:
 		tirador.en_penal = turno_mio
@@ -607,15 +615,24 @@ func _actualizar_penales(delta: float) -> void:
 		EstadoPenal.ESPERA:
 			if turno_mio:
 				if balon.velocidad.length() > 8.0:
+					_soltar_arquero()
 					penal_estado = EstadoPenal.EN_VUELO
 					penal_tiempo = 0.0
 			elif penal_tiempo > 1.8:
+				_soltar_arquero()
 				_tirar_penal_rival()
 				penal_estado = EstadoPenal.EN_VUELO
 				penal_tiempo = 0.0
 		EstadoPenal.EN_VUELO:
 			if penal_tiempo > 3.0:
 				_terminar_penal(false)
+
+
+## Ya pateó: ahora sí el arquero puede moverse para atajar.
+func _soltar_arquero() -> void:
+	var arquero = _arquero_de(1 if turno_mio else 0)
+	if arquero != null:
+		arquero.quieto = false
 
 
 func _tirar_penal_rival() -> void:

@@ -43,6 +43,7 @@ var area_propia := Rect2()           # el área donde puede estar el arquero
 var velocidad := 7.5
 var aceleracion := 45.0
 var en_penal := false                # true = está por tirar un penal (apunta con el joystick)
+var quieto := false                  # true = no se mueve ni un dedo (lo usa el arquero en los penales)
 
 # --- Lo que le dice el partido en cada cuadro ---
 var balon = null
@@ -95,6 +96,9 @@ func _physics_process(delta: float) -> void:
 
 ## Mueve al jugador y decide hacia dónde mira.
 func _mover(delta: float) -> void:
+	if quieto:
+		direccion = Vector2.ZERO
+		velocity = Vector2.ZERO
 	velocity = velocity.move_toward(direccion.normalized() * velocidad, aceleracion * delta)
 	move_and_slide()
 
@@ -264,12 +268,13 @@ func _pensar() -> void:
 		var destino := formacion
 		match rol:
 			Rol.DEFENSA:
-				destino = formacion + Vector2(signo * 7.0, 0.0)
+				destino = formacion + Vector2(signo * 18.0, 0.0)
 			Rol.MEDIO:
-				destino = formacion + Vector2(signo * 12.0, 0.0)
+				destino = formacion + Vector2(signo * 35.0, 0.0)
 			Rol.DELANTERO:
-				destino = Vector2(arco_rival - signo * 9.0, clampf(b.y * 0.6, -6.0, 6.0))
-		destino = destino.lerp(b, 0.25)
+				destino = Vector2(arco_rival - signo * 12.0, clampf(b.y * 0.6, -10.0, 10.0))
+		# Se acerca un poquito al balón para apoyar, pero sin amontonarse.
+		destino = destino.lerp(b, 0.10)
 		direccion = destino - position
 		return
 
@@ -294,18 +299,25 @@ func _pensar() -> void:
 		direccion = Vector2.ZERO
 
 
-func _pensar_arquero(b: Vector2, distancia: float) -> void:
-	if _agarrando:
+func _pensar_arquero(b: Vector2, _distancia: float) -> void:
+	# En un penal se queda clavado en la línea hasta que pateen (es la regla).
+	if _agarrando or quieto:
 		direccion = Vector2.ZERO
 		return
-	var signo := signf(arco_rival - arco_propio)
-	var linea_x := arco_propio + signo * 1.5
-	var objetivo := Vector2(linea_x, clampf(b.y, -3.0, 3.0))
-	# Si el balón entra al área, sale a atajarlo.
-	if area_propia.has_point(b) and distancia < 11.0:
-		objetivo = b
+	# Se para SIEMPRE entre el balón y el centro del arco, como los arqueros
+	# de verdad: si el balón está lejos se queda en la línea, y si se acerca
+	# sale un poco para tapar el ángulo.
+	var centro_arco := Vector2(arco_propio, 0.0)
+	var al_balon := b - centro_arco
+	var lejos := al_balon.length()
+	if lejos < 0.1:
+		direccion = Vector2.ZERO
+		return
+	var salida := clampf(18.0 - lejos, 0.0, 7.0)
+	var objetivo := centro_arco + (al_balon / lejos) * salida
+	objetivo.y = clampf(objetivo.y, -6.5, 6.5)
 	direccion = objetivo - position
-	if direccion.length() < 0.15:
+	if direccion.length() < 0.25:
 		direccion = Vector2.ZERO
 
 
@@ -316,9 +328,9 @@ func _quizas_patear(signo: float) -> void:
 	if hacia.dot(Vector2(signo, 0.0)) < 0.5:
 		return                       # no estoy mirando hacia el arco
 	var dist_arco := absf(arco_rival - position.x)
-	if dist_arco < 14.0:
+	if dist_arco < 18.0:
 		patear(20.0, 0.0)
-	elif dist_arco < 26.0:
+	elif dist_arco < 34.0:
 		patear(15.0, 0.0)            # despeje largo
 
 
