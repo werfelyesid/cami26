@@ -9,6 +9,8 @@ var marcador: Label
 var reloj: Label
 var franja: Label
 var mensaje: Label
+var barra_potencia: ProgressBar
+var barra_texto: Label
 
 var _espera_mensaje := 0.0
 
@@ -50,6 +52,31 @@ func _ready() -> void:
 	mensaje.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(mensaje)
 
+	# --- barra de potencia del tiro (abajo al centro) ---
+	barra_texto = _etiqueta(24)
+	barra_texto.text = "POTENCIA  1 / 10"
+	barra_texto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	barra_texto.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	barra_texto.offset_left = -180.0
+	barra_texto.offset_right = 180.0
+	barra_texto.offset_top = -132.0
+	barra_texto.offset_bottom = -100.0
+	barra_texto.visible = false
+	add_child(barra_texto)
+
+	barra_potencia = ProgressBar.new()
+	barra_potencia.min_value = 1.0
+	barra_potencia.max_value = 10.0
+	barra_potencia.value = 1.0
+	barra_potencia.show_percentage = false
+	barra_potencia.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	barra_potencia.offset_left = -170.0
+	barra_potencia.offset_right = 170.0
+	barra_potencia.offset_top = -92.0
+	barra_potencia.offset_bottom = -62.0
+	barra_potencia.visible = false
+	add_child(barra_potencia)
+
 	# --- botón de pausa, arriba a la derecha ---
 	var pausa := Button.new()
 	pausa.text = "II"
@@ -87,6 +114,17 @@ func mostrar_mensaje(texto: String, segundos := 2.0) -> void:
 	mensaje.text = texto
 	mensaje.visible = true
 	_espera_mensaje = segundos
+
+
+## Muestra la barra de potencia (de 1 a 10). Con 0 se esconde.
+func potencia(valor: float) -> void:
+	var mostrar := valor > 0.05
+	barra_potencia.visible = mostrar
+	barra_texto.visible = mostrar
+	if mostrar:
+		var v := clampf(valor, 1.0, 10.0)
+		barra_potencia.value = v
+		barra_texto.text = "POTENCIA  %d / 10" % int(round(v))
 
 
 func _pedir_pausa() -> void:

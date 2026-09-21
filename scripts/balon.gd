@@ -18,11 +18,16 @@ const VELOCIDAD_MAXIMA := 24.0
 var velocidad := Vector2.ZERO
 ## Si el arquero lo tiene en las manos, no se mueve solo.
 var agarrado := false
+## Quién fue el último que lo tocó. Sirve para saber de quién es el saque
+## cuando el balón se va afuera (saca el equipo contrario, como de verdad).
+var ultimo_toque = null
 
 
 func _ready() -> void:
 	collision_layer = 4
-	collision_mask = 1
+	# Capa 8: solo choca con los palos y las redes. Las líneas de la cancha
+	# (capa 1) no lo frenan, así que se puede ir afuera.
+	collision_mask = 8
 	var forma := CircleShape2D.new()
 	forma.radius = RADIO
 	var choque := CollisionShape2D.new()

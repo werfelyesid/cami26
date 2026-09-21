@@ -13,10 +13,10 @@ y su número, como en el fútbol de verdad.
 ### En el celular (Android)
 | Control | Qué hace |
 |---|---|
-| **Joystick** (izquierda) | Mover al jugador |
-| **TIRO** (rojo) | Disparar al arco |
-| **PASE** (azul) | Tocar suave |
-| **CAMBIAR** (amarillo) | Pasar a manejar otro jugador de tu equipo (el que esté más cerca del balón) |
+| **Joystick** (izquierda) | Mover al jugador. Si lo empujas **hasta el fondo**, el jugador **esprinta** |
+| **TIRO** (rojo) | **Mantenlo apretado para cargar la potencia** (sale la barra de abajo, de 1 a 10) y suéltalo para patear |
+| **PASE** (azul) | Pase a un compañero: busca al mejor (que esté adelante y sin marca). Si no hay, toca suave hacia adelante |
+| **CAMBIAR** (amarillo) | Pasar a manejar otro jugador de tu equipo (el que esté más cerca del balón). **Si el balón está en tu área, también puedes pasar a manejar al arquero** |
 
 El jugador que manejas tiene un **aro amarillo**. Los demás juegan solos.
 
@@ -24,9 +24,14 @@ El jugador que manejas tiene un **aro amarillo**. Los demás juegan solos.
 | Acción | Tecla |
 |---|---|
 | Mover | `W` `A` `S` `D` o las flechas |
-| Tiro | `Espacio` |
-| Pase | `Shift` |
+| Tiro (mantener = cargar) | `Espacio` |
+| Pase | `P` (o `E`) |
+| Esprintar | `Shift` |
 | Cambiar de jugador | `Q` o `Tab` |
+
+Si manejas al **arquero**: `Espacio` es **atajar** y `Shift` es la **barrida**
+para llegar a la pelota. Con el balón en las manos, mantén `Espacio` para cargar
+el despeje y suéltalo para reventarla.
 
 El mouse funciona como si fuera el dedo, porque en `project.godot` está activado
 `input_devices/pointing/emulate_touch_from_mouse`.
@@ -57,6 +62,57 @@ Cada equipo juega con esta formación (16 jugadores):
    ( 3 )   ( 5 )   ( 6 )   ( 4 )   ( 2 )     5 defensas
                     ( 1 )                     arquero
 ```
+
+## Lo que es como el fútbol de verdad
+
+- **El balón se puede ir afuera.** Ya no hay paredes que lo frenen: si lo tiran
+  mal, sale de la cancha y hay saque.
+- **Saca el equipo contrario al que la tocó de última**, como manda la regla:
+  - Por la **banda** → **saque de banda**, desde el mismo lugar donde salió.
+  - Por la **línea de fondo**:
+    - Si la tiró afuera el que **atacaba** → **saque de arco** (la saca el arquero).
+    - Si la tocó el que **defendía** → **¡tiro de esquina!**
+- Mientras se acomoda el saque, **los del otro equipo se alejan y no pueden tocar
+  el balón**: hasta que el saque se hace, la pelota está "fuera de juego". Así los
+  bots no te caen encima.
+- **El saque de banda lo haces tú y CON LAS MANOS**: te quedas parado en la línea
+  (no puedes caminar), **apuntas con el joystick** y lanzas con **TIRO** (fuerte) o
+  **PASE** (suave). En la compu, el joystick es `W A S D`.
+- Si el saque es del rival, lo hace **un bot solo** (también con las manos).
+- El córner y el saque de arco se hacen con el pie, como en la vida real.
+- **El arquero no atrapa todo**: si el pelotazo viene fuerte, la **rechaza** y el
+  balón queda vivo (rebote); si viene suave, la agarra con las manos y después
+  la despeja buscando un compañero.
+- **El balón rebota en los palos.**
+- **Las IA también pasan**: si un rival se les viene encima, le sueltan el balón
+  a un compañero que esté adelante y sin marca.
+- **No se amontonan**: además de cada uno quedarse en su puesto, los jugadores se
+  "empujan" suavemente entre ellos para no quedar todos apelotonados.
+- Con el balón en los pies se corre un poco más lento (por eso te alcanzan).
+
+## La potencia del tiro
+
+Manteniendo apretado **TIRO** (o `Espacio`) se carga la potencia y aparece la
+barra abajo: **mínimo 1, máximo 10**.
+
+| Potencia | Qué pasa |
+|---|---|
+| **1 a 3** | Toque suave y muy preciso |
+| **4 a 7** | Buen tiro, un poco de desvío |
+| **8 a 10** | Un misil, pero se puede ir **afuera** (como cuando le pegas muy fuerte y se va arriba del arco) |
+
+Si un tiro se va afuera, el juego cobra el saque que corresponde.
+
+## Faltas, amarillas y penales
+
+- Si un rival **te atropella** (o tú a él), es **FALTA**.
+- Si la falta es **dentro del área**, es **¡PENAL!** (se cobra desde el punto de penal).
+- Todo el mundo se aleja del balón mientras se cobra la falta (como la regla de
+  los 9,15 m) y nadie puede tocar el balón hasta que se haga el cobro.
+- Las IA **no se te tiran encima**: cuando te tienen el balón se arriman con
+  cuidado, porque si no les cobran falta.
+- Al **arquero que tiene el balón en las manos no se le puede quitar**: el que se
+  le arrime se lleva **TARJETA AMARILLA**.
 
 ## Los puestos y los números
 
@@ -188,8 +244,9 @@ no cabe entre el arquero y el palo y no se puede meter gol nunca.
 2. **Versión 2D, 1 contra 1** (más limpia y fácil de mejorar).
 3. **Versión 2D actual**: 16 contra 16, con puestos y números con sentido, arqueros
    con manitas que atajan y siguen al balón, cambio de jugador, tapar pateadas,
-   descanso, tiempo extra y 8 rondas de penales (con el arquero quieto hasta
-   que pateen, como manda la regla).
+   pases de la IA, balón que se va afuera con saques de banda, córner y saque de
+   arco, descanso, tiempo extra y 8 rondas de penales (con el arquero quieto
+   hasta que pateen, como manda la regla).
 
 ---
 

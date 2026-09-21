@@ -97,21 +97,30 @@ func _crear_ayuda() -> void:
 	texto.text = """CÓMO JUGAR
 
 • Mueve a tu jugador con el joystick de la izquierda.
-  En la compu también sirven W, A, S, D o las flechas.
-• TIRO (rojo): dispara al arco.  En la compu: la barra espaciadora.
-• PASE (azul): toca suave.  En la compu: Shift.
+  En la compu: W A S D o las flechas.
+• TIRO (rojo): MANTENLO APRETADO para cargar la potencia (de 1 a 10)
+  y suéltalo para patear. Entre más cargues, más duro sale...
+  ¡pero menos preciso: se te puede ir afuera! En la compu: la barra espaciadora.
+  La barra de abajo te muestra la potencia.
+• PASE (azul): pase a un compañero.  En la compu: la tecla P.
+• CORRER MÁS RÁPIDO (esprint): Shift en la compu, o empujar el joystick
+  hasta el fondo en el celular. (Los compañeros con el balón corren más lento.)
 • CAMBIAR (amarillo): pasas a manejar otro jugador de tu equipo
-  (el que esté más cerca del balón).  En la compu: Q.
-  Al que manejas se le ve un aro amarillo.
+  (el más cercano al balón). En la compu: la tecla Q.
+  Si el balón está en tu área, también puedes pasar a manejar al ARQUERO.
+
+• SI MANEJAS AL ARQUERO: TIRO es atajar (con las manos) y Shift es la
+  barrida para llegar a la pelota. Si tiene el balón, mantenlo apretado
+  para cargar el despeje y suéltalo para reventarla.
 
 • Son 16 jugadores por equipo, cada uno con su puesto y su número:
   1 arquero · 2,3,4,5,6 defensas · 7,8,10,11,15,16 medios · 9,12,13,14 delanteros.
-  Los defensas marcan a los atacantes rivales y tapan los tiros,
-  los medios presionan y los delanteros van a hacer los goles.
-  Si no los manejas, juegan solos.
+  Los defensas marcan y tapan los tiros, los medios presionan y los
+  delanteros van a hacer los goles. Si no los manejas, juegan solos.
 
-• El arquero tiene manitas (un tercio de su tamaño) para tapar el arco,
-  atrapa el balón con las manos y lo despeja. No sale del área.
+• Al arquero que tiene el balón en las manos NO se le puede quitar:
+  el que se le arrime se lleva AMARILLA. Y si te atropellan, es FALTA:
+  si es dentro del área... ¡PENAL!
 
 • El partido son 90 minutos = 90 segundos de verdad:
   al minuto 45 hay descanso y el reloj se para 10 segundos.
@@ -119,7 +128,7 @@ func _crear_ayuda() -> void:
   y si siguen empatados... ¡8 rondas de penales!
 
 ¡Gana el que meta más goles!"""
-	texto.add_theme_font_size_override("font_size", 21)
+	texto.add_theme_font_size_override("font_size", 19)
 	texto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	texto.custom_minimum_size = Vector2(940.0, 540.0)
 	caja.add_child(texto)

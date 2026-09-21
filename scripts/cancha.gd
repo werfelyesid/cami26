@@ -149,33 +149,39 @@ func _color_gente(azar: RandomNumberGenerator) -> Color:
 # ------------------------------------------------------------------ muros ---
 
 func _crear_muros() -> void:
-	# Capa 1: son las paredes. El balón y los jugadores chocan con ellas.
+	# OJO con las capas:
+	#   capa 1 = las líneas de la cancha. Son paredes INVISIBLES solo para los
+	#            jugadores (para que no se salgan). El balón las ignora, así
+	#            que si lo tiran mal se va afuera y hay saque de banda.
+	#   capa 8 = los palos y las redes del arco. Esos sí los choca el balón
+	#            (y también los jugadores, para que no se metan en la red).
+
 	# Bandas (arriba y abajo).
-	_muro(Vector2(0.0, MITAD_ANCHO + 0.5), Vector2(LARGO + 2.0, 1.0))
-	_muro(Vector2(0.0, -MITAD_ANCHO - 0.5), Vector2(LARGO + 2.0, 1.0))
+	_muro(Vector2(0.0, MITAD_ANCHO + 0.5), Vector2(LARGO + 2.0, 1.0), 1)
+	_muro(Vector2(0.0, -MITAD_ANCHO - 0.5), Vector2(LARGO + 2.0, 1.0), 1)
 
 	for s in [-1.0, 1.0]:
 		var x: float = s * (MITAD_LARGO + 0.5)
 		var largo := MITAD_ANCHO - MITAD_PORTERIA
 		var cy := MITAD_PORTERIA + largo * 0.5
 		# Fondos, dejando libre la boca del arco.
-		_muro(Vector2(x, cy), Vector2(1.0, largo))
-		_muro(Vector2(x, -cy), Vector2(1.0, largo))
-		# El bolsillo que hay detrás del arco.
+		_muro(Vector2(x, cy), Vector2(1.0, largo), 1)
+		_muro(Vector2(x, -cy), Vector2(1.0, largo), 1)
+		# El bolsillo que hay detrás del arco (la red).
 		var x_fondo: float = s * (MITAD_LARGO + LARGO_RED)
-		_muro(Vector2(x_fondo, 0.0), Vector2(1.0, ANCHO_PORTERIA + 1.0))
+		_muro(Vector2(x_fondo, 0.0), Vector2(1.0, ANCHO_PORTERIA + 1.0), 9)
 		var x_medio: float = s * (MITAD_LARGO + LARGO_RED * 0.5)
-		_muro(Vector2(x_medio, MITAD_PORTERIA + 0.25), Vector2(LARGO_RED, 0.5))
-		_muro(Vector2(x_medio, -MITAD_PORTERIA - 0.25), Vector2(LARGO_RED, 0.5))
-		# Los palos del arco (rebotan).
-		_muro(Vector2(s * MITAD_LARGO, MITAD_PORTERIA), Vector2(0.56, 0.56))
-		_muro(Vector2(s * MITAD_LARGO, -MITAD_PORTERIA), Vector2(0.56, 0.56))
+		_muro(Vector2(x_medio, MITAD_PORTERIA + 0.25), Vector2(LARGO_RED, 0.5), 9)
+		_muro(Vector2(x_medio, -MITAD_PORTERIA - 0.25), Vector2(LARGO_RED, 0.5), 9)
+		# Los palos del arco: en esos el balón REBOTA.
+		_muro(Vector2(s * MITAD_LARGO, MITAD_PORTERIA), Vector2(0.56, 0.56), 9)
+		_muro(Vector2(s * MITAD_LARGO, -MITAD_PORTERIA), Vector2(0.56, 0.56), 9)
 
 
-func _muro(centro: Vector2, tam: Vector2) -> void:
+func _muro(centro: Vector2, tam: Vector2, capa: int) -> void:
 	var cuerpo := StaticBody2D.new()
 	cuerpo.position = centro
-	cuerpo.collision_layer = 1
+	cuerpo.collision_layer = capa
 	cuerpo.collision_mask = 0
 	add_child(cuerpo)
 	var forma := RectangleShape2D.new()

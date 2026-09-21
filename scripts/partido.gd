@@ -49,6 +49,8 @@ const AREA_PROFUNDIDAD := 16.5
 const AREA_MITAD_ANCHO := 20.0
 
 const ZOOM_ALTO := 36.0               # cuántos metros se ven de alto
+## Qué tan cerca tienen que estar dos jugadores para que sea choque.
+const CHOQUE := 2.7
 const VELOCIDAD_MIA := 8.2
 const VELOCIDAD_COMPANERO := 7.2
 
@@ -95,6 +97,9 @@ var pausado := false
 var congelado := false                # mientras se celebra un gol
 var terminado := false
 var _espera_cambio := 0.0
+var _proteccion_id := 0                # para saber si ya pasó el ratito de protección
+var _en_saque := false                 # hay un saque en curso (el balón está "fuera de juego")
+var _espera_falta := 0.0               # para no cobrar mil faltas seguidas
 
 # --- Penales ---
 var penales_mios := 0
@@ -285,6 +290,7 @@ func _process(delta: float) -> void:
 
 	# Cambiar de jugador.
 	_espera_cambio = maxf(0.0, _espera_cambio - delta)
+	_espera_falta = maxf(0.0, _espera_falta - delta)
 	if controles != null and controles.cambiar:
 		controles.cambiar = false
 		_cambiar_jugador()
@@ -312,6 +318,8 @@ func _process(delta: float) -> void:
 
 	_seguir_el_balon()
 	hud.actualizar(goles_local, goles_rival, tiempo, _texto_fase(), _texto_extra())
+	if controlado != null:
+		hud.potencia(controlado.potencia)
 
 
 func _physics_process(_delta: float) -> void:
@@ -321,7 +329,9 @@ func _physics_process(_delta: float) -> void:
 		_revisar_gol()
 		return
 	_marcar_dueno_del_balon()
+	_revisar_falta()
 	_revisar_gol()
+	_revisar_fuera()
 
 
 ## Decide quién tiene el balón y quién es el más cercano de cada equipo.
@@ -331,13 +341,21 @@ func _marcar_dueno_del_balon() -> void:
 	if balon == null:
 		return
 
+	# Mientras hay un saque, el balón no es de nadie: nadie lo puede robar.
+	if _en_saque:
+		dueno_balon = null
+		for f in futbolistas:
+			f.puede_tocar = false
+			f.dueno_balon = null
+		return
+
 	var mejor = null
 	var mejor_distancia := 1000000.0
 	var mas_cercano := [null, null]
 	var distancia_equipo := [1000000.0, 1000000.0]
 
 	for f in futbolistas:
-		if not f.visible:
+		if not f.visible or f.sin_tocar:
 			continue
 		var d: float = f.position.distance_to(balon.position)
 		# El más cercano de cada equipo (ese va a presionar).
@@ -349,7 +367,7 @@ func _marcar_dueno_del_balon() -> void:
 		if f == dueno_balon:
 			d -= 0.45                     # el que la tiene, la conserva
 		if f == controlado:
-			d -= 0.40                     # tu jugador tiene una ayudita
+			d -= 0.60                     # tu jugador tiene una buena ayudita
 		if d < mejor_distancia:
 			mejor_distancia = d
 			mejor = f
@@ -365,7 +383,7 @@ func _marcar_dueno_del_balon() -> void:
 
 
 func _revisar_gol() -> void:
-	if balon == null or congelado:
+	if balon == null or congelado or _en_saque:
 		return
 	var p: Vector2 = balon.position
 	if absf(p.y) >= MITAD_PORTERIA:
@@ -374,6 +392,200 @@ func _revisar_gol() -> void:
 		_gol(true)
 	elif p.x < -MITAD_LARGO:
 		_gol(false)
+
+
+## Si el balón se va afuera, saca el equipo contrario al que lo tocó de última,
+## como en el fútbol de verdad: saque de banda, tiro de esquina o saque de arco.
+func _revisar_fuera() -> void:
+	if balon == null or congelado or _en_saque:
+		return
+	var p: Vector2 = balon.position
+	if absf(p.x) > MITAD_LARGO:
+		_sacar_de_fondo(p)
+		return
+	if absf(p.y) > MITAD_ANCHO:
+		_sacar_de_banda(p)
+
+
+## De quién era el equipo que tocó el balón por última vez.
+func _equipo_del_ultimo_toque() -> int:
+	if balon.ultimo_toque != null:
+		return balon.ultimo_toque.equipo
+	return 0
+
+
+func _sacar_de_banda(p: Vector2) -> void:
+	var equipo := 1 - _equipo_del_ultimo_toque()
+	var punto := Vector2(clampf(p.x, -MITAD_LARGO + 3.0, MITAD_LARGO - 3.0), signf(p.y) * (MITAD_ANCHO - 0.8))
+	_hacer_saque(punto, equipo, "¡SAQUE DE BANDA!  Apunta y lanza con TIRO", false, true)
+
+
+func _sacar_de_fondo(p: Vector2) -> void:
+	var lado := signf(p.x)
+	var equipo_del_arco := 0 if lado < 0.0 else 1
+	if _equipo_del_ultimo_toque() == equipo_del_arco:
+		# La tocó el que defiende ese arco: es TIRO DE ESQUINA para el otro.
+		var punto := Vector2(lado * (MITAD_LARGO - 0.8), signf(p.y) * (MITAD_ANCHO - 0.8))
+		_hacer_saque(punto, 1 - equipo_del_arco, "¡TIRO DE ESQUINA!", false, false)
+	else:
+		# La tiró afuera el que estaba atacando: SAQUE DE ARCO para el que defiende.
+		_hacer_saque(Vector2(lado * (MITAD_LARGO - 7.0), 0.0), equipo_del_arco, "SAQUE DE ARCO", true, false)
+
+
+## Acomoda el saque. Ojo: NO se congela a nadie. El que saca se queda quieto
+## (sacando = true) y los del otro equipo se alejan y no pueden tocar el balón,
+## porque hasta que se haga el saque la pelota está "fuera de juego".
+func _hacer_saque(punto: Vector2, equipo: int, texto: String, permitir_arquero: bool, con_las_manos: bool) -> void:
+	_en_saque = true
+	_proteccion_id += 1
+	var mi_proteccion := _proteccion_id
+
+	balon.reiniciar(punto)
+	balon.ultimo_toque = null
+	_parar_todos()
+	hud.mostrar_mensaje(texto, 2.2)
+
+	# Los del otro equipo se alejan y no pueden tocarla mientras sacas.
+	for f in futbolistas:
+		f.sin_tocar = (f.equipo != equipo)
+		f.sacando = false
+
+	# El saque de banda y el córner de TU equipo los haces tú.
+	# El saque de arco lo hace el arquero, como en el fútbol de verdad.
+	var sacador = null
+	if equipo == 0 and not permitir_arquero and controlado != null:
+		sacador = controlado
+	else:
+		sacador = _mas_cercano_a(punto, equipo, permitir_arquero)
+
+	if sacador != null:
+		var adentro := Vector2(-signf(punto.x) * 2.0, 0.0)
+		if absf(punto.y) > MITAD_ANCHO - 1.5:
+			adentro = Vector2(0.0, -signf(punto.y) * 3.0)
+		elif absf(punto.x) > MITAD_LARGO - 1.5:
+			adentro = Vector2(-signf(punto.x) * 3.0, 0.0)
+		# El saque de banda se hace bien desde la línea, con los pies afuera.
+		sacador.position = punto if con_las_manos else punto + adentro
+		sacador.velocity = Vector2.ZERO
+		sacador.direccion = Vector2.ZERO
+		sacador.rotation = sacador.angulo_hacia(adentro)
+		sacador.sacando = true
+		sacador.saque_con_mano = con_las_manos
+		sacador._tiempo_saque = 0.0
+
+	# Espera a que se haga el saque (si se queda dormido, lo hace solo a los 8 s).
+	var espera := 0.0
+	while espera < 8.0:
+		await get_tree().create_timer(0.25).timeout
+		if terminado or mi_proteccion != _proteccion_id:
+			return
+		if sacador == null or not sacador.sacando:
+			break
+		espera += 0.25
+
+	if sacador != null and sacador.sacando:
+		sacador.sacando = false
+		if sacador.saque_con_mano:
+			sacador.lanzar(20.0)
+		else:
+			sacador.patear(18.0, 0.0)
+
+	_en_saque = false
+	_quitar_proteccion()
+
+
+func _quitar_proteccion() -> void:
+	for f in futbolistas:
+		f.sin_tocar = false
+
+
+## El jugador de un equipo que está más cerca de un punto.
+func _mas_cercano_a(punto: Vector2, equipo: int, permitir_arquero: bool):
+	var mejor = null
+	var mejor_distancia := 1000000.0
+	for f in futbolistas:
+		if f.equipo != equipo:
+			continue
+		if f.rol == ARQUERO and not permitir_arquero:
+			continue
+		var d: float = f.position.distance_to(punto)
+		if d < mejor_distancia:
+			mejor_distancia = d
+			mejor = f
+	return mejor
+
+
+func _congelar_jugadores(congelar: bool) -> void:
+	for f in futbolistas:
+		f.set_physics_process(not congelar)
+
+
+# ---------------------------------------------------------------- faltas ---
+
+## Si un rival se te atraviesa encima (o tú encima de él) es FALTA.
+## Si la falta es dentro del área, es PENAL.
+func _revisar_falta() -> void:
+	if balon == null or _en_saque or congelado:
+		return
+
+	# Al arquero que tiene el balón en las manos NO se le puede quitar:
+	# el que se le arrime se lleva amarilla.
+	for a in arqueros:
+		if not a._agarrando:
+			continue
+		for f in futbolistas:
+			if f.equipo == a.equipo or f.rol == ARQUERO:
+				continue
+			if f.position.distance_to(a.position) < CHOQUE:
+				_espera_falta = 3.0
+				hud.mostrar_mensaje("¡AMARILLA!  Al arquero no se le quita el balón", 2.4)
+				f.velocity = (f.position - a.position).normalized() * 10.0
+				return
+
+	if dueno_balon == null:
+		return
+	if _espera_falta > 0.0:
+		return
+
+	var victima = dueno_balon
+	if victima.rol == ARQUERO:
+		return
+
+	for f in futbolistas:
+		if f.equipo == victima.equipo or f.rol == ARQUERO:
+			continue
+		var d: Vector2 = victima.position - f.position
+		var dist := d.length()
+		if dist > CHOQUE or dist < 0.01:
+			continue
+		var hacia_victima := d / dist
+		# Qué tan fuerte lo está atropellando cada uno.
+		var empuje_rival: float = f.velocity.dot(hacia_victima)
+		var empuje_mio: float = victima.velocity.dot(-hacia_victima)
+		if empuje_rival > 4.5 and empuje_rival > empuje_mio + 1.0:
+			_cobrar_falta(f, victima)
+			return
+		if empuje_mio > 4.5 and empuje_mio > empuje_rival + 1.0:
+			_cobrar_falta(victima, f)
+			return
+
+
+func _cobrar_falta(infractor, victima) -> void:
+	_espera_falta = 3.0
+	var equipo_favorecido: int = victima.equipo
+	var punto: Vector2 = victima.position
+
+	# ¿La falta fue dentro del área del que la hizo? Entonces es PENAL.
+	var es_penal: bool = _area_de(infractor.equipo).has_point(punto)
+	if es_penal:
+		var signo := 1.0 if infractor.equipo == 0 else -1.0
+		punto = Vector2(signo * (MITAD_LARGO - PUNTO_PENAL), 0.0)
+
+	var texto := "¡FALTA A TU FAVOR!" if equipo_favorecido == 0 else "FALTA EN CONTRA"
+	if es_penal:
+		texto = "¡PENAL PARA TI!" if equipo_favorecido == 0 else "PENAL PARA EL RIVAL"
+
+	_hacer_saque(punto, equipo_favorecido, texto, false, false)
 
 
 func _seguir_el_balon() -> void:
@@ -390,10 +602,14 @@ func _seguir_el_balon() -> void:
 func _cambiar_jugador() -> void:
 	if fase == Fase.PENALES:
 		return
+	# Si el balón está en tu área, también puedes pasar a manejar al arquero.
+	var con_arquero: bool = _area_de(0).has_point(balon.position)
 	var mejor = null
 	var mejor_distancia := 1000000.0
 	for f in futbolistas:
-		if f.equipo != 0 or f.rol == ARQUERO or f == controlado:
+		if f.equipo != 0 or f == controlado:
+			continue
+		if f.rol == ARQUERO and not con_arquero:
 			continue
 		var d: float = f.position.distance_to(balon.position)
 		if d < mejor_distancia:
@@ -430,6 +646,7 @@ func _gol(es_tuyo: bool) -> void:
 		hud.mostrar_mensaje("GOL DEL RIVAL", 2.2)
 
 	hud.actualizar(goles_local, goles_rival, tiempo, _texto_fase(), _texto_extra())
+	_congelar_jugadores(true)
 	_parar_todos()
 
 	await get_tree().create_timer(2.2).timeout
@@ -440,10 +657,14 @@ func _gol(es_tuyo: bool) -> void:
 
 
 func _saque_de_centro() -> void:
+	_en_saque = false
 	balon.reiniciar(Vector2.ZERO)
+	balon.ultimo_toque = null
 	dueno_balon = null
 	for f in futbolistas:
 		f.quieto = false
+		f.sin_tocar = false
+		f.sacando = false
 		f.en_penal = false
 		f.visible = true
 		f.set_physics_process(true)
