@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="cami26"
-config/description="Fútbol 3D para jugar en el celular"
+config/description="Fútbol 2D para jugar en el celular"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"

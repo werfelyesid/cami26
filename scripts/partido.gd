@@ -1,47 +1,105 @@
-extends Node3D
-## La escena del partido: arma todo, lleva el marcador y el reloj,
-## y decide cuándo es gol.
+extends Node2D
+## La escena del partido.
 ##
-## Reglas (bien simples, estilo arcade):
-##   - Tú atacas la portería de la derecha (x = +30).
-##   - El rival ataca la tuya (x = -30).
-##   - Dura 4 minutos. Gana el que meta más goles.
+## 16 jugadores por equipo, cada uno con su rol y su número:
+##   1 = arquero
+##   2, 3, 4, 5, 6 = defensas
+##   7, 8, 10, 11, 15, 16 = medios
+##   9, 12, 13, 14 = delanteros
+##
+## Tú manejas un jugador de tu equipo y puedes cambiar a otro con el botón
+## CAMBIAR (o con la tecla Q). Los otros juegan solos, según su rol.
+##
+## El partido, como en el fútbol de verdad:
+##   - 90 minutos de reloj. Ojo: 1 segundo de verdad = 1 minuto de juego,
+##     así que el partido dura 90 segundos.
+##   - Al minuto 45 hay descanso y el reloj se para 10 segundos.
+##   - Si van empatados al 90, hay tiempo extra hasta el 120.
+##   - Y si siguen empatados... ¡8 rondas de penales!
 
-const Escenario = preload("res://scripts/estadio.gd")
+const Escenario = preload("res://scripts/cancha.gd")
 const Balon = preload("res://scripts/balon.gd")
-const Jugador = preload("res://scripts/jugador.gd")
-const Rival = preload("res://scripts/rival.gd")
-const Portero = preload("res://scripts/portero.gd")
+const Jugador = preload("res://scripts/futbolista.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Controles = preload("res://scripts/controles_tactiles.gd")
 
-const DURACION := 240.0            # 4 minutos
-const MITAD_LARGO := 30.0
-const MITAD_ANCHO := 20.0
-const ANCHO_PORTERIA := 6.0
-const ALTO_PORTERIA := 2.2
+# Los roles: los mismos números que el enum de futbolista.gd.
+const ARQUERO := 0
+const DEFENSA := 1
+const MEDIO := 2
+const DELANTERO := 3
 
-const POS_BALON := Vector3(0.0, 0.35, 0.0)
-const POS_JUGADOR := Vector3(-6.0, 0.3, 0.0)
-const POS_RIVAL := Vector3(6.0, 0.3, 0.0)
-const X_ARQUERO := 28.8
+enum Fase { JUEGO, DESCANSO, EXTRA, PENALES, FINAL }
+enum EstadoPenal { ESPERA, EN_VUELO, RESULTADO }
+
+# --- El reloj ---
+const MINUTO := 60.0                  # segundos de juego que tiene un minuto
+const FIN_1T := 45.0 * MINUTO
+const FIN_2T := 90.0 * MINUTO
+const FIN_EXTRA := 120.0 * MINUTO
+const SEGUNDOS_DESCANSO := 10.0
+const RONDAS_PENALES := 8
+
+# --- La cancha (igual que en cancha.gd) ---
+const MITAD_LARGO := 50.0
+const MITAD_ANCHO := 32.0
+const MITAD_PORTERIA := 5.0           # mitad del arco de 10 m
+const PUNTO_PENAL := 11.0
+const AREA_PROFUNDIDAD := 16.5
+const AREA_MITAD_ANCHO := 20.0
+
+const ZOOM_ALTO := 30.0               # cuántos metros se ven de alto
+const VELOCIDAD_MIA := 8.2
+const VELOCIDAD_COMPANERO := 7.2
+
+## Los 16 puestos de tu equipo. Tu equipo ataca hacia la derecha (+x).
+const FORMACION := [
+	{"rol": ARQUERO, "num": 1, "pos": Vector2(-48.0, 0.0)},
+	{"rol": DEFENSA, "num": 2, "pos": Vector2(-32.0, -24.0)},
+	{"rol": DEFENSA, "num": 3, "pos": Vector2(-32.0, -12.0)},
+	{"rol": DEFENSA, "num": 4, "pos": Vector2(-32.0, 0.0)},
+	{"rol": DEFENSA, "num": 5, "pos": Vector2(-32.0, 12.0)},
+	{"rol": DEFENSA, "num": 6, "pos": Vector2(-32.0, 24.0)},
+	{"rol": MEDIO, "num": 7, "pos": Vector2(-10.0, -26.0)},
+	{"rol": MEDIO, "num": 8, "pos": Vector2(-10.0, -16.0)},
+	{"rol": MEDIO, "num": 10, "pos": Vector2(-10.0, -6.0)},
+	{"rol": MEDIO, "num": 11, "pos": Vector2(-10.0, 6.0)},
+	{"rol": MEDIO, "num": 15, "pos": Vector2(-10.0, 16.0)},
+	{"rol": MEDIO, "num": 16, "pos": Vector2(-10.0, 26.0)},
+	{"rol": DELANTERO, "num": 9, "pos": Vector2(6.0, -6.0)},
+	{"rol": DELANTERO, "num": 12, "pos": Vector2(6.0, 18.0)},
+	{"rol": DELANTERO, "num": 13, "pos": Vector2(6.0, 6.0)},
+	{"rol": DELANTERO, "num": 14, "pos": Vector2(6.0, -18.0)},
+]
 
 var balon = null
-var jugador = null
-var rival = null
-var porteros := []
-var futbolistas := []
-var camara: Camera3D
+var futbolistas := []                 # los 32 jugadores
+var arqueros := []
+var camara: Camera2D
 var hud = null
 var controles = null
 var menu_pausa: CanvasLayer
+var controlado = null                 # el jugador que manejas ahora
+var dueno_balon = null                # quién tiene el balón
 
 var goles_local := 0
 var goles_rival := 0
-var tiempo := DURACION
+var tiempo := 0.0                     # segundos de juego (5400 = minuto 90)
+var fase := Fase.JUEGO
+var descanso_hecho := false
+var cuenta_descanso := 0.0
 var pausado := false
-var congelado := false             # true mientras se celebra un gol
+var congelado := false                # mientras se celebra un gol
 var terminado := false
+var _espera_cambio := 0.0
+
+# --- Penales ---
+var penales_mios := 0
+var penales_rival := 0
+var ronda_penal := 0
+var turno_mio := true
+var penal_estado := EstadoPenal.ESPERA
+var penal_tiempo := 0.0
 
 
 func _ready() -> void:
@@ -53,67 +111,106 @@ func _ready() -> void:
 	_saque_de_centro()
 
 
-# ------------------------------------------------------------------ armado ---
+# ----------------------------------------------------------------- armado ---
 
 func _crear_balon() -> void:
 	balon = Balon.new()
-	balon.position = POS_BALON
+	balon.position = Vector2.ZERO
 	add_child(balon)
 
 
 func _crear_equipos() -> void:
-	# --- Tú (camiseta azul) ---
-	jugador = Jugador.new()
-	jugador.color_camiseta = Color(0.12, 0.32, 0.92)
-	jugador.color_pantalon = Color(0.96, 0.96, 0.99)
-	jugador.balon = balon
-	jugador.position = POS_JUGADOR
-	add_child(jugador)
-	futbolistas.append(jugador)
-
-	# --- El rival (camiseta roja) ---
-	rival = Rival.new()
-	rival.color_camiseta = Color(0.88, 0.16, 0.16)
-	rival.color_pantalon = Color(0.10, 0.10, 0.12)
-	rival.color_piel = Color(0.78, 0.55, 0.38)
-	rival.balon = balon
-	rival.velocidad_dificultad = Ajustes.velocidad_rival()
-	rival.position = POS_RIVAL
-	add_child(rival)
-	futbolistas.append(rival)
-
-	# --- Los dos arqueros ---
-	_crear_arquero(-X_ARQUERO, Vector3(1.0, 0.0, 0.0))
-	_crear_arquero(X_ARQUERO, Vector3(-1.0, 0.0, 0.0))
+	_crear_equipo(0)
+	_crear_equipo(1)
+	# Empezamos manejando al delantero número 9.
+	controlado = _buscar(0, DELANTERO)
+	if controlado != null:
+		controlado.controlado = true
 
 
-func _crear_arquero(x: float, mira: Vector3) -> void:
-	var arquero = Portero.new()
-	arquero.color_camiseta = Color(0.95, 0.76, 0.12)
-	arquero.color_pantalon = Color(0.16, 0.16, 0.20)
-	arquero.balon = balon
-	arquero.linea_x = x
-	arquero.despeje = mira
-	arquero.mirar_fijo = true
-	arquero.hacia_fijo = mira
-	arquero.puede_regatear = false
-	arquero.velocidad = Ajustes.velocidad_arquero()
-	arquero.position = Vector3(x, 0.3, 0.0)
-	arquero.rotation.y = atan2(-mira.x, -mira.z)
-	add_child(arquero)
-	porteros.append(arquero)
-	futbolistas.append(arquero)
+func _crear_equipo(equipo: int) -> void:
+	for datos in FORMACION:
+		var f = Jugador.new()
+		f.equipo = equipo
+		f.rol = datos["rol"]
+		f.numero = datos["num"]
+		var puesto: Vector2 = datos["pos"]
+		if equipo == 1:
+			puesto = Vector2(-puesto.x, puesto.y)      # el rival juega al revés
+		f.formacion = puesto
+
+		if equipo == 0:
+			# Tu equipo: azul.
+			f.arco_propio = -MITAD_LARGO
+			f.arco_rival = MITAD_LARGO
+			f.color_camiseta = Color(0.12, 0.32, 0.92)
+			f.color_numero = Color(1, 1, 1)
+			f.velocidad = VELOCIDAD_COMPANERO if f.rol != ARQUERO else Ajustes.velocidad_arquero()
+			if f.rol == ARQUERO:
+				f.color_camiseta = Color(0.95, 0.76, 0.12)
+		else:
+			# El rival: rojo.
+			f.arco_propio = MITAD_LARGO
+			f.arco_rival = -MITAD_LARGO
+			f.color_camiseta = Color(0.86, 0.16, 0.16)
+			f.color_numero = Color(1, 1, 1)
+			f.velocidad = Ajustes.velocidad_rival() if f.rol != ARQUERO else Ajustes.velocidad_arquero()
+			if f.rol == ARQUERO:
+				f.color_camiseta = Color(0.20, 0.72, 0.35)
+
+		f.area_propia = _area_de(equipo)
+		f.balon = balon
+		f.todos = futbolistas
+		f.position = puesto
+		add_child(f)
+		futbolistas.append(f)
+		if f.rol == ARQUERO:
+			arqueros.append(f)
+
+
+func _area_de(equipo: int) -> Rect2:
+	var prof := AREA_PROFUNDIDAD
+	if equipo == 0:
+		return Rect2(-MITAD_LARGO, -AREA_MITAD_ANCHO, prof, AREA_MITAD_ANCHO * 2.0)
+	return Rect2(MITAD_LARGO - prof, -AREA_MITAD_ANCHO, prof, AREA_MITAD_ANCHO * 2.0)
+
+
+## Busca un jugador por equipo y rol.
+func _buscar(equipo: int, rol: int):
+	for f in futbolistas:
+		if f.equipo == equipo and f.rol == rol:
+			return f
+	return null
+
+
+func _arquero_de(equipo: int):
+	for f in arqueros:
+		if f.equipo == equipo:
+			return f
+	return null
 
 
 func _crear_camara() -> void:
-	camara = Camera3D.new()
-	camara.fov = 64.0
-	camara.near = 0.15
-	camara.far = 400.0
-	camara.position = POS_BALON + Vector3(0.0, 15.0, 25.0)
+	camara = Camera2D.new()
+	camara.position_smoothing_enabled = true
+	camara.position_smoothing_speed = 5.0
+	camara.limit_left = -int(MITAD_LARGO)
+	camara.limit_right = int(MITAD_LARGO)
+	camara.limit_top = -int(MITAD_ANCHO)
+	camara.limit_bottom = int(MITAD_ANCHO)
+	camara.enabled = true
 	add_child(camara)
-	camara.current = true
-	camara.look_at(POS_BALON + Vector3(0.0, 0.7, 0.0), Vector3.UP)
+	_ajustar_camara()
+	get_viewport().size_changed.connect(_ajustar_camara)
+
+
+## Que se vean siempre unos 30 m de alto, sin importar el tamaño de la pantalla.
+func _ajustar_camara() -> void:
+	if camara == null:
+		return
+	var alto := float(get_viewport_rect().size.y)
+	var z := alto / ZOOM_ALTO
+	camara.zoom = Vector2(z, z)
 
 
 func _crear_interfaz() -> void:
@@ -122,17 +219,23 @@ func _crear_interfaz() -> void:
 	hud.pausa_pedida.connect(_pausar)
 
 	controles = Controles.new()
-	hud.add_child(controles)     # va dentro del CanvasLayer, para que se vea encima
-	jugador.controles = controles
+	hud.add_child(controles)
+	_poner_controles()
 
 	_crear_menu_pausa()
+
+
+## Los controles táctiles se le pasan al jugador que estás manejando.
+func _poner_controles() -> void:
+	for f in futbolistas:
+		f.controles = controles
+	if controlado != null:
+		controlado.controles = controles
 
 
 func _crear_menu_pausa() -> void:
 	menu_pausa = CanvasLayer.new()
 	menu_pausa.layer = 5
-	# "WHEN_PAUSED" es la clave: este menú tiene que funcionar justo cuando
-	# el juego está congelado.
 	menu_pausa.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	add_child(menu_pausa)
 
@@ -176,78 +279,142 @@ func _crear_menu_pausa() -> void:
 func _process(delta: float) -> void:
 	if pausado or terminado:
 		return
-	tiempo = maxf(0.0, tiempo - delta)
-	_seguir_balon(delta)
-	hud.actualizar(goles_local, goles_rival, tiempo)
-	if tiempo <= 0.0:
-		_finalizar()
+
+	# Cambiar de jugador.
+	_espera_cambio = maxf(0.0, _espera_cambio - delta)
+	if controles != null and controles.cambiar:
+		controles.cambiar = false
+		_cambiar_jugador()
+	if (Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_TAB)) and _espera_cambio <= 0.0:
+		_espera_cambio = 0.4
+		_cambiar_jugador()
+
+	match fase:
+		Fase.JUEGO:
+			tiempo += MINUTO * delta
+			if tiempo >= FIN_2T:
+				_terminar_tiempo_normal()
+			elif tiempo >= FIN_1T and not descanso_hecho:
+				_a_descanso()
+		Fase.DESCANSO:
+			cuenta_descanso -= delta
+			if cuenta_descanso <= 0.0:
+				_empezar_segundo_tiempo()
+		Fase.EXTRA:
+			tiempo += MINUTO * delta
+			if tiempo >= FIN_EXTRA:
+				_terminar_tiempo_extra()
+		Fase.PENALES:
+			_actualizar_penales(delta)
+
+	_seguir_el_balon()
+	hud.actualizar(goles_local, goles_rival, tiempo, _texto_fase(), _texto_extra())
 
 
 func _physics_process(_delta: float) -> void:
 	if pausado or terminado or congelado:
 		return
+	if fase == Fase.PENALES:
+		_revisar_gol()
+		return
 	_marcar_dueno_del_balon()
 	_revisar_gol()
-	_revisar_balon_fuera()
 
 
-## El que esté más cerca del balón es el único que lo puede ir empujando.
-## Así no se pelean dos jugadores por la misma pelota.
+## Decide quién tiene el balón y quién es el más cercano de cada equipo.
+## El dueño es el más cercano, pero el que ya lo tiene conserva una ventaja
+## (si no, se lo quitarían todo el tiempo).
 func _marcar_dueno_del_balon() -> void:
 	if balon == null:
+		return
+
+	var mejor = null
+	var mejor_distancia := 1000000.0
+	var mas_cercano := [null, null]
+	var distancia_equipo := [1000000.0, 1000000.0]
+
+	for f in futbolistas:
+		if not f.visible:
+			continue
+		var d: float = f.position.distance_to(balon.position)
+		# El más cercano de cada equipo (ese va a presionar).
+		if f.rol != ARQUERO and d < distancia_equipo[f.equipo]:
+			distancia_equipo[f.equipo] = d
+			mas_cercano[f.equipo] = f
+		if f.rol == ARQUERO:
+			continue                      # los arqueros no regatean
+		if f == dueno_balon:
+			d -= 0.45                     # el que la tiene, la conserva
+		if f == controlado:
+			d -= 0.40                     # tu jugador tiene una ayudita
+		if d < mejor_distancia:
+			mejor_distancia = d
+			mejor = f
+
+	if mejor_distancia > 3.2:
+		mejor = null
+	dueno_balon = mejor
+
+	for f in futbolistas:
+		f.dueno_balon = dueno_balon
+		f.puede_tocar = (f == dueno_balon)
+		f.soy_mas_cercano = (f == mas_cercano[f.equipo])
+
+
+func _revisar_gol() -> void:
+	if balon == null or congelado:
+		return
+	var p: Vector2 = balon.position
+	if absf(p.y) >= MITAD_PORTERIA:
+		return
+	if p.x > MITAD_LARGO:
+		_gol(true)
+	elif p.x < -MITAD_LARGO:
+		_gol(false)
+
+
+func _seguir_el_balon() -> void:
+	if camara == null or balon == null:
+		return
+	var foco: Vector2 = balon.position
+	if controlado != null and fase != Fase.PENALES:
+		foco = (foco + controlado.position) * 0.5
+	camara.position = foco
+
+
+# ------------------------------------------------------ cambiar de jugador ---
+
+func _cambiar_jugador() -> void:
+	if fase == Fase.PENALES:
 		return
 	var mejor = null
 	var mejor_distancia := 1000000.0
 	for f in futbolistas:
-		if not f.puede_regatear:
+		if f.equipo != 0 or f.rol == ARQUERO or f == controlado:
 			continue
-		var d: float = f.global_position.distance_to(balon.global_position)
+		var d: float = f.position.distance_to(balon.position)
 		if d < mejor_distancia:
 			mejor_distancia = d
 			mejor = f
-	for f in futbolistas:
-		f.puede_tocar = (f == mejor)
-
-
-func _revisar_gol() -> void:
-	if balon == null:
+	if mejor == null:
 		return
-	var p: Vector3 = balon.global_position
-	var dentro_del_arco := absf(p.z) < ANCHO_PORTERIA * 0.5 and p.y < ALTO_PORTERIA
-	if p.x > MITAD_LARGO and dentro_del_arco:
-		_anotar(true)
-	elif p.x < -MITAD_LARGO and dentro_del_arco:
-		_anotar(false)
-
-
-## Si el balón se va muy lejos (por encima de las tablas), vuelve al centro.
-func _revisar_balon_fuera() -> void:
-	if balon == null:
-		return
-	var p: Vector3 = balon.global_position
-	if absf(p.x) > MITAD_LARGO + 6.0 or absf(p.z) > MITAD_ANCHO + 5.0 or p.y < -3.0:
-		balon.reiniciar(POS_BALON)
-
-
-func _seguir_balon(delta: float) -> void:
-	if camara == null or balon == null:
-		return
-	var foco: Vector3 = balon.global_position
-	foco.x = clampf(foco.x, -13.0, 13.0)
-	foco.z = clampf(foco.z, -9.0, 9.0)
-	foco.y = 0.6
-
-	var destino := foco + Vector3(0.0, 15.0, 25.0)
-	camara.global_position = camara.global_position.lerp(destino, minf(1.0, delta * 2.4))
-
-	var mira := foco + Vector3(0.0, 0.4, 0.0)
-	if camara.global_position.distance_to(mira) > 1.0:
-		camara.look_at(mira, Vector3.UP)
+	if controlado != null:
+		controlado.controlado = false
+		controlado.velocidad = VELOCIDAD_COMPANERO
+	controlado = mejor
+	controlado.controlado = true
+	controlado.controles = controles
+	controlado.velocidad = VELOCIDAD_MIA
 
 
 # ---------------------------------------------------------------- jugadas ---
 
-func _anotar(es_tuyo: bool) -> void:
+func _gol(es_tuyo: bool) -> void:
+	if fase == Fase.PENALES:
+		if (es_tuyo and turno_mio) or (not es_tuyo and not turno_mio):
+			_terminar_penal(true)
+		return
+
 	if congelado or terminado:
 		return
 	congelado = true
@@ -259,7 +426,7 @@ func _anotar(es_tuyo: bool) -> void:
 		goles_rival += 1
 		hud.mostrar_mensaje("GOL DEL RIVAL", 2.2)
 
-	hud.actualizar(goles_local, goles_rival, tiempo)
+	hud.actualizar(goles_local, goles_rival, tiempo, _texto_fase(), _texto_extra())
 	_parar_todos()
 
 	await get_tree().create_timer(2.2).timeout
@@ -270,49 +437,244 @@ func _anotar(es_tuyo: bool) -> void:
 
 
 func _saque_de_centro() -> void:
-	balon.reiniciar(POS_BALON)
-
-	jugador.global_position = POS_JUGADOR
-	jugador.velocity = Vector3.ZERO
-	jugador.direccion = Vector3.ZERO
-
-	rival.global_position = POS_RIVAL
-	rival.velocity = Vector3.ZERO
-	rival.direccion = Vector3.ZERO
-
-	var i := 0
-	for arquero in porteros:
-		var x := X_ARQUERO if i == 0 else -X_ARQUERO
-		arquero.global_position = Vector3(x, 0.3, 0.0)
-		arquero.velocity = Vector3.ZERO
-		arquero.direccion = Vector3.ZERO
-		i += 1
-
-	hud.actualizar(goles_local, goles_rival, tiempo)
+	balon.reiniciar(Vector2.ZERO)
+	dueno_balon = null
+	for f in futbolistas:
+		f.visible = true
+		f.set_physics_process(true)
+		f.position = f.formacion
+		f.velocity = Vector2.ZERO
+		f.direccion = Vector2.ZERO
+		f.en_penal = false
+		f.controlado = false
+		f.puede_tocar = false
+	if controlado != null:
+		controlado.controlado = true
+		controlado.velocidad = VELOCIDAD_MIA
 
 
 func _parar_todos() -> void:
 	for f in futbolistas:
-		f.direccion = Vector3.ZERO
-		f.velocity = Vector3.ZERO
+		f.direccion = Vector2.ZERO
+		f.velocity = Vector2.ZERO
 	if balon != null:
-		balon.linear_velocity = Vector3.ZERO
-		balon.angular_velocity = Vector3.ZERO
+		balon.velocidad = Vector2.ZERO
+
+
+# ------------------------------------------------------------------ reloj ---
+
+func _texto_fase() -> String:
+	match fase:
+		Fase.JUEGO:
+			return "SEGUNDO TIEMPO" if descanso_hecho else "PRIMER TIEMPO"
+		Fase.DESCANSO:
+			return "DESCANSO"
+		Fase.EXTRA:
+			return "TIEMPO EXTRA"
+		Fase.PENALES:
+			return "PENALES"
+		_:
+			return "FINAL"
+
+
+func _texto_extra() -> String:
+	if fase == Fase.DESCANSO:
+		return "vuelve en %d s" % int(ceilf(cuenta_descanso))
+	if fase == Fase.PENALES:
+		return "ronda %d de %d  ·  %d - %d" % [ronda_penal + 1, RONDAS_PENALES, penales_mios, penales_rival]
+	return "pulsa CAMBIAR (o Q) para elegir otro jugador"
+
+
+func _a_descanso() -> void:
+	fase = Fase.DESCANSO
+	descanso_hecho = true
+	tiempo = FIN_1T
+	cuenta_descanso = SEGUNDOS_DESCANSO
+	_parar_todos()
+	hud.mostrar_mensaje("DESCANSO", SEGUNDOS_DESCANSO)
+
+
+func _empezar_segundo_tiempo() -> void:
+	fase = Fase.JUEGO
+	_saque_de_centro()
+	hud.mostrar_mensaje("¡SEGUNDO TIEMPO!", 2.0)
+
+
+func _terminar_tiempo_normal() -> void:
+	tiempo = FIN_2T
+	_parar_todos()
+	if goles_local == goles_rival:
+		fase = Fase.EXTRA
+		hud.mostrar_mensaje("¡NOS VAMOS A TIEMPO EXTRA!", 3.0)
+		await get_tree().create_timer(3.0).timeout
+		if terminado:
+			return
+		_saque_de_centro()
+	else:
+		_finalizar()
+
+
+func _terminar_tiempo_extra() -> void:
+	tiempo = FIN_EXTRA
+	_parar_todos()
+	if goles_local == goles_rival:
+		await _empezar_penales()
+	else:
+		_finalizar()
 
 
 func _finalizar() -> void:
 	terminado = true
 	_parar_todos()
-
 	var texto := "EMPATE  %d - %d" % [goles_local, goles_rival]
 	if goles_local > goles_rival:
 		texto = "¡GANASTE  %d - %d!" % [goles_local, goles_rival]
 	elif goles_rival > goles_local:
 		texto = "PERDISTE  %d - %d" % [goles_local, goles_rival]
 	hud.mostrar_mensaje(texto, 3.8)
-	hud.actualizar(goles_local, goles_rival, 0.0)
+	hud.actualizar(goles_local, goles_rival, tiempo, "FINAL", "")
 
 	await get_tree().create_timer(4.0).timeout
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+
+
+# ---------------------------------------------------------------- penales ---
+
+func _empezar_penales() -> void:
+	fase = Fase.PENALES
+	penales_mios = 0
+	penales_rival = 0
+	ronda_penal = 0
+	turno_mio = true
+	hud.mostrar_mensaje("¡PENALES!", 2.5)
+	# Que la cámara pueda llegar hasta el arco.
+	camara.limit_left = -int(MITAD_LARGO) - 30
+	camara.limit_right = int(MITAD_LARGO) + 30
+	camara.limit_top = -int(MITAD_ANCHO) - 30
+	camara.limit_bottom = int(MITAD_ANCHO) + 30
+	await get_tree().create_timer(2.5).timeout
+	if terminado:
+		return
+	_preparar_penal()
+
+
+func _preparar_penal() -> void:
+	penal_estado = EstadoPenal.ESPERA
+	penal_tiempo = 0.0
+
+	var equipo_tirador := 0 if turno_mio else 1
+	var tirador = _buscar(equipo_tirador, DELANTERO)
+	var arquero = _arquero_de(1 - equipo_tirador)
+	var signo := 1.0 if turno_mio else -1.0
+	var punto := Vector2(signo * (MITAD_LARGO - PUNTO_PENAL), 0.0)
+
+	balon.reiniciar(punto)
+
+	for f in futbolistas:
+		if f == tirador or f == arquero:
+			f.visible = true
+			f.set_physics_process(true)
+			f.puede_tocar = false
+			f.en_penal = false
+			f.direccion = Vector2.ZERO
+			f.velocity = Vector2.ZERO
+		else:
+			f.visible = false
+			f.set_physics_process(false)
+			f.controlado = false
+			f.position = Vector2(0.0, 300.0)
+
+	if arquero != null:
+		arquero.velocidad = 9.5
+		arquero.position = Vector2(signo * (MITAD_LARGO - 1.6), 0.0)
+
+	if tirador != null:
+		tirador.en_penal = turno_mio
+		tirador.controlado = turno_mio
+		tirador.position = punto - Vector2(signo * 3.0, 0.0)
+		tirador.rotation = tirador.angulo_hacia(Vector2(signo, 0.0))
+		tirador.velocity = Vector2.ZERO
+
+	if turno_mio:
+		if controlado != null and controlado != tirador:
+			controlado.controlado = false
+		controlado = tirador
+
+
+func _actualizar_penales(delta: float) -> void:
+	penal_tiempo += delta
+	match penal_estado:
+		EstadoPenal.ESPERA:
+			if turno_mio:
+				if balon.velocidad.length() > 8.0:
+					penal_estado = EstadoPenal.EN_VUELO
+					penal_tiempo = 0.0
+			elif penal_tiempo > 1.8:
+				_tirar_penal_rival()
+				penal_estado = EstadoPenal.EN_VUELO
+				penal_tiempo = 0.0
+		EstadoPenal.EN_VUELO:
+			if penal_tiempo > 3.0:
+				_terminar_penal(false)
+
+
+func _tirar_penal_rival() -> void:
+	var tirador = _buscar(1, DELANTERO)
+	if tirador == null:
+		return
+	var altura := randf_range(-3.4, 3.4)
+	var objetivo := Vector2(-MITAD_LARGO, altura)
+	tirador.hacia = (objetivo - tirador.position).normalized()
+	tirador.rotation = tirador.angulo_hacia(tirador.hacia)
+	tirador.patear(24.0, 0.0)
+
+
+func _terminar_penal(fue_gol: bool) -> void:
+	if penal_estado == EstadoPenal.RESULTADO or terminado:
+		return
+	penal_estado = EstadoPenal.RESULTADO
+
+	if fue_gol:
+		if turno_mio:
+			penales_mios += 1
+			hud.mostrar_mensaje("¡GOOOL!", 1.5)
+		else:
+			penales_rival += 1
+			hud.mostrar_mensaje("GOL DEL RIVAL", 1.5)
+	else:
+		hud.mostrar_mensaje("¡ATAJÓ EL ARQUERO!", 1.5)
+
+	balon.velocidad = Vector2.ZERO
+	hud.actualizar(goles_local, goles_rival, tiempo, _texto_fase(), _texto_extra())
+
+	await get_tree().create_timer(1.7).timeout
+	if terminado:
+		return
+	_siguiente_penal()
+
+
+func _siguiente_penal() -> void:
+	if turno_mio:
+		turno_mio = false
+		_preparar_penal()
+		return
+	# Terminó la ronda: los dos equipos ya tiraron.
+	turno_mio = true
+	ronda_penal += 1
+	if ronda_penal >= RONDAS_PENALES and penales_mios != penales_rival:
+		_fin_penales()
+		return
+	_preparar_penal()
+
+
+func _fin_penales() -> void:
+	terminado = true
+	var texto := "PENALES: GANASTE  %d - %d" % [penales_mios, penales_rival]
+	if penales_rival > penales_mios:
+		texto = "PENALES: PERDISTE  %d - %d" % [penales_mios, penales_rival]
+	hud.mostrar_mensaje(texto, 4.0)
+
+	await get_tree().create_timer(4.5).timeout
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 

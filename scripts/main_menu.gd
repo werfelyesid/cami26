@@ -86,7 +86,7 @@ func _crear_ayuda() -> void:
 	panel_ayuda.set_anchors_preset(Control.PRESET_CENTER)
 	panel_ayuda.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel_ayuda.grow_vertical = Control.GROW_DIRECTION_BOTH
-	panel_ayuda.custom_minimum_size = Vector2(860.0, 480.0)
+	panel_ayuda.custom_minimum_size = Vector2(1000.0, 640.0)
 	add_child(panel_ayuda)
 
 	var caja := VBoxContainer.new()
@@ -98,18 +98,30 @@ func _crear_ayuda() -> void:
 
 • Mueve a tu jugador con el joystick de la izquierda.
   En la compu también sirven W, A, S, D o las flechas.
-• Botón TIRO (rojo): dispara fuerte al arco.
-  En la compu: la barra espaciadora.
-• Botón PASE (azul): toca suave.
-  En la compu: la tecla Shift.
-• Corre contra el balón y tu jugador se lo va llevando solo.
-• Los arqueros atacan el balón y lo despejan.
-• Tú atacas el arco de la derecha. Dura 4 minutos.
+• TIRO (rojo): dispara al arco.  En la compu: la barra espaciadora.
+• PASE (azul): toca suave.  En la compu: Shift.
+• CAMBIAR (amarillo): pasas a manejar otro jugador de tu equipo
+  (el que esté más cerca del balón).  En la compu: Q.
+  Al que manejas se le ve un aro amarillo.
+
+• Son 16 jugadores por equipo, cada uno con su puesto y su número:
+  1 arquero · 2,3,4,5,6 defensas · 7,8,10,11,15,16 medios · 9,12,13,14 delanteros.
+  Los defensas marcan a los atacantes rivales y tapan los tiros,
+  los medios presionan y los delanteros van a hacer los goles.
+  Si no los manejas, juegan solos.
+
+• El arquero tiene manitas (un tercio de su tamaño) para tapar el arco,
+  atrapa el balón con las manos y lo despeja. No sale del área.
+
+• El partido son 90 minutos = 90 segundos de verdad:
+  al minuto 45 hay descanso y el reloj se para 10 segundos.
+  Si van empatados al 90 hay tiempo extra hasta el 120,
+  y si siguen empatados... ¡8 rondas de penales!
 
 ¡Gana el que meta más goles!"""
-	texto.add_theme_font_size_override("font_size", 24)
+	texto.add_theme_font_size_override("font_size", 21)
 	texto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	texto.custom_minimum_size = Vector2(800.0, 380.0)
+	texto.custom_minimum_size = Vector2(940.0, 540.0)
 	caja.add_child(texto)
 
 	var volver := _boton("VOLVER", 26, Vector2(240.0, 60.0))

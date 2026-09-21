@@ -1,179 +1,377 @@
-extends CharacterBody3D
-## Base de todos los jugadores: tu jugador, el rival y los arqueros.
+extends CharacterBody2D
+## Un jugador de fútbol, de cualquiera de los dos equipos.
 ##
-## Aquí está lo importante:
-##   - _logica()   -> la decisión de hacia dónde moverse (cada uno la cambia)
-##   - _mover()    -> la física del movimiento y hacia dónde mira
-##   - _tocar_balon() -> el "regate": el que tiene el balón lo va empujando
-##   - patear()    -> el tiro y el pase
+## El mismo script sirve para todos:
+##   - Si `controlado` es true -> lo manejas tú (joystick del celular o teclado).
+##   - Si es false             -> juega solo, según su ROL y su NÚMERO.
 ##
-## Las medidas del cuerpo son de mentira (cápsula de 1,70 m) para que se
-## vea parecido a una persona, no para ser realista.
+## Los números son los del fútbol de verdad:
+##   1 = arquero · 2,3,4,5 = defensas · 6,8 = medios · 9,10,11 = delanteros
 
-var velocidad := 7.0
-var aceleracion := 45.0
+const Balon = preload("res://scripts/balon.gd")
 
+## Los roles. El partido los pone con estos números: 0, 1, 2, 3.
+enum Rol { ARQUERO, DEFENSA, MEDIO, DELANTERO }
+
+## Cuánto más grandes se ven (2.0 = el doble).
+## Ojo: si se agrandan mucho, el balón ya no cabe entre el arquero y el palo.
+const ESCALA := 2.0
+## Radio con el que se dibuja.
+const RADIO := 0.70 * ESCALA
+## Radio con el que choca (un poco más chicó, para poder acercarse al balón).
+const RADIO_CHOQUE := 0.85
+## Las manitas del arquero: un tercio de su tamaño.
+const MANITA := RADIO / 3.0
+
+# --- Quién es ---
+var numero := 9
+var rol := Rol.MEDIO
+var equipo := 0                      # 0 = tu equipo, 1 = el rival
+var controlado := false
 var color_camiseta := Color(0.15, 0.35, 0.9)
-var color_pantalon := Color(0.95, 0.95, 0.95)
+var color_numero := Color(1, 1, 1)
 var color_piel := Color(0.85, 0.64, 0.47)
 var color_pelo := Color(0.14, 0.10, 0.08)
 
-## Hacia dónde quiere caminar, en cada eje (-1 a 1). La pone _logica().
-var direccion := Vector3.ZERO
-## Hacia dónde está mirando de verdad (se calcula con el movimiento).
-var hacia := Vector3.FORWARD
-## El balón del partido (lo pone la escena del partido).
-var balon = null
-## El partido lo pone en true solo para el jugador que está más cerca del balón.
-var puede_tocar := false
-## Si es false, este jugador nunca empuja el balón (lo usan los arqueros).
-var puede_regatear := true
-## Si es true, el jugador mira siempre hacia "hacia_fijo" (lo usan los arqueros).
-var mirar_fijo := false
-var hacia_fijo := Vector3.ZERO
+# --- Dónde juega ---
+var arco_propio := -30.0             # el arco que defiende
+var arco_rival := 30.0               # el arco donde ataca
+var formacion := Vector2.ZERO        # su puesto en la cancha
+var area_propia := Rect2()           # el área donde puede estar el arquero
 
-## Cuenta atrás para que no se pueda patear mil veces por segundo.
+# --- Cómo juega ---
+var velocidad := 7.5
+var aceleracion := 45.0
+var en_penal := false                # true = está por tirar un penal (apunta con el joystick)
+
+# --- Lo que le dice el partido en cada cuadro ---
+var balon = null
+var todos := []                      # todos los jugadores del partido
+var dueno_balon = null               # quién tiene el balón ahora
+var soy_mas_cercano := false         # el más cercano de MI equipo al balón
+var puede_tocar := false             # si es el dueño, puede ir empujando el balón
+var controles = null                 # los controles táctiles (si lo controlas tú)
+
+var direccion := Vector2.ZERO
+var hacia := Vector2.UP
+
 var _espera_pateo := 0.0
+var _agarrando := false              # el arquero tiene el balón en las manos
+var _tiempo_agarre := 0.0
+var _alcance_atajada := 0.0
 
 
 func _ready() -> void:
-	# --- choque (una cápsula que llega hasta el suelo) ---
-	var capsula := CapsuleShape3D.new()
-	capsula.radius = 0.33
-	capsula.height = 1.7
-	var choque := CollisionShape3D.new()
-	choque.shape = capsula
-	choque.position = Vector3(0.0, 0.85, 0.0)
+	# Capa 2: jugadores. Solo chocan con la capa 1 (muros y palos).
+	collision_layer = 2
+	collision_mask = 1
+	var forma := CircleShape2D.new()
+	forma.radius = RADIO_CHOQUE
+	var choque := CollisionShape2D.new()
+	choque.shape = forma
 	add_child(choque)
-
-	# --- piernas ---
-	for lado in [-1.0, 1.0]:
-		_pieza(Vector3(0.14, 0.62, 0.16), Vector3(0.11 * lado, 0.31, 0.0), color_pantalon)
-	# --- pies ---
-	for lado in [-1.0, 1.0]:
-		_pieza(Vector3(0.16, 0.09, 0.26), Vector3(0.11 * lado, 0.05, -0.05), Color(0.12, 0.12, 0.14))
-	# --- camiseta ---
-	_pieza(Vector3(0.46, 0.62, 0.28), Vector3(0.0, 1.02, 0.0), color_camiseta)
-	# --- brazos ---
-	for lado in [-1.0, 1.0]:
-		_pieza(Vector3(0.11, 0.52, 0.13), Vector3(0.29 * lado, 1.06, 0.0), color_piel)
-	# --- cabeza ---
-	var cabeza := MeshInstance3D.new()
-	var esfera := SphereMesh.new()
-	esfera.radius = 0.19
-	esfera.height = 0.38
-	esfera.radial_segments = 16
-	esfera.rings = 8
-	cabeza.mesh = esfera
-	cabeza.position = Vector3(0.0, 1.50, 0.0)
-	cabeza.material_override = _material(color_piel, 0.7)
-	add_child(cabeza)
-	# --- pelo ---
-	var pelo := MeshInstance3D.new()
-	var esfera_pelo := SphereMesh.new()
-	esfera_pelo.radius = 0.196
-	esfera_pelo.height = 0.39
-	esfera_pelo.radial_segments = 16
-	esfera_pelo.rings = 8
-	pelo.mesh = esfera_pelo
-	pelo.position = Vector3(0.0, 1.545, 0.015)
-	pelo.material_override = _material(color_pelo, 0.9)
-	add_child(pelo)
+	_alcance_atajada = RADIO + MANITA + Balon.RADIO
+	queue_redraw()
 
 
 func _physics_process(delta: float) -> void:
 	_espera_pateo = maxf(0.0, _espera_pateo - delta)
-	_logica(delta)
-	_mover(delta)
-	_tocar_balon(delta)
 
-
-## Cada jugador decide aquí hacia dónde quiere moverse.
-## La clase base no hace nada; el jugador, el rival y el arquero la cambian.
-func _logica(_delta: float) -> void:
-	pass
-
-
-func _mover(delta: float) -> void:
-	# Gravedad (así el jugador no sale volando ni se hunde).
-	var g := float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
-	if is_on_floor():
-		velocity.y = -0.5
+	if controlado:
+		_leer_entrada()
+	elif rol != Rol.ARQUERO and _agarrando:
+		direccion = Vector2.ZERO
 	else:
-		velocity.y -= g * delta
+		_pensar()
 
-	# Acelerar hacia la dirección que pidió _logica().
-	var objetivo := direccion.normalized() * velocidad
-	velocity.x = move_toward(velocity.x, objetivo.x, aceleracion * delta)
-	velocity.z = move_toward(velocity.z, objetivo.z, aceleracion * delta)
+	_mover(delta)
+	if rol == Rol.ARQUERO:
+		_atajar(delta)
+	else:
+		_tocar_balon(delta)
+		_bloquear_balon()
+	queue_redraw()
+
+
+## Mueve al jugador y decide hacia dónde mira.
+func _mover(delta: float) -> void:
+	velocity = velocity.move_toward(direccion.normalized() * velocidad, aceleracion * delta)
 	move_and_slide()
 
-	# Hacia dónde mira.
-	if mirar_fijo:
-		if hacia_fijo.length() > 0.001:
-			hacia = hacia_fijo.normalized()
-			rotation.y = atan2(-hacia.x, -hacia.z)
+	var signo := signf(arco_rival - arco_propio)
+
+	if rol == Rol.ARQUERO:
+		# El arquero nunca se sale de su área (ahí es donde puede usar las manos).
+		position.x = clampf(position.x, area_propia.position.x + RADIO_CHOQUE, area_propia.end.x - RADIO_CHOQUE)
+		position.y = clampf(position.y, area_propia.position.y + RADIO_CHOQUE, area_propia.end.y - RADIO_CHOQUE)
+		# Siempre mira hacia la cancha.
+		rotation = angulo_hacia(Vector2(signo, 0.0))
 	else:
-		var plano := Vector3(velocity.x, 0.0, velocity.z)
-		if plano.length() > 0.5:
-			rotation.y = lerp_angle(rotation.y, atan2(-plano.x, -plano.z), minf(1.0, 14.0 * delta))
-		hacia = -global_transform.basis.z
-		hacia.y = 0.0
-		if hacia.length() > 0.001:
-			hacia = hacia.normalized()
+		if velocity.length() > 0.7:
+			rotation = lerp_angle(rotation, angulo_hacia(velocity), minf(1.0, 14.0 * delta))
+
+	# La "naricita" del dibujo apunta hacia arriba (-y): por eso se lee así.
+	hacia = Vector2.UP.rotated(rotation)
 
 
-## El regate: si este jugador es el más cercano al balón y va de frente,
-## le va empujando la pelota por delante. Así no hay que hacer malabares.
+## El regate: el dueño del balón lo va empujando por delante.
 func _tocar_balon(_delta: float) -> void:
-	if balon == null or not puede_tocar or not puede_regatear:
+	if balon == null or not puede_tocar:
 		return
-	var d: Vector3 = balon.global_position - global_position
-	d.y = 0.0
+	var d: Vector2 = balon.position - position
 	var distancia := d.length()
-	if distancia > 1.7 or distancia < 0.01:
+	var alcance: float = RADIO + Balon.RADIO + 0.5
+	if distancia > alcance or distancia < 0.01:
 		return
-	if hacia.dot(d / distancia) < 0.35:
+	if hacia.dot(d / distancia) < 0.2:
 		return
-	var v: Vector3 = balon.linear_velocity
-	var objetivo := hacia * maxf(velocidad * 0.95, 4.0)
-	v.x = lerpf(v.x, objetivo.x, 0.35)
-	v.z = lerpf(v.z, objetivo.z, 0.35)
-	balon.linear_velocity = v
+	balon.velocidad = balon.velocidad.lerp(hacia * maxf(velocidad * 1.05, 5.0), 0.35)
+
+
+## Tapar la pateada: si el balón viene hacia mí y no soy el dueño, rebota en mí.
+func _bloquear_balon() -> void:
+	if balon == null or puede_tocar or balon.agarrado:
+		return
+	var d: Vector2 = balon.position - position
+	var distancia := d.length()
+	if distancia > RADIO + Balon.RADIO or distancia < 0.01:
+		return
+	var normal := d / distancia
+	var v: Vector2 = balon.velocidad
+	if v.dot(normal) > -1.0:
+		return                       # el balón no viene hacia mí
+	balon.velocidad = v.bounce(normal) * 0.5
+
+
+## El arquero: ataja el balón con las manos y después lo despeja.
+func _atajar(delta: float) -> void:
+	if balon == null:
+		return
+
+	if _agarrando:
+		# El balón queda en las manos: lo lleva adelante y después lo revienta.
+		balon.position = position + hacia * (RADIO + Balon.RADIO * 0.4)
+		balon.velocidad = Vector2.ZERO
+		_tiempo_agarre -= delta
+		if _tiempo_agarre <= 0.0:
+			_agarrando = false
+			balon.agarrado = false
+			balon.velocidad = hacia * 18.0
+		return
+
+	var d: Vector2 = balon.position - position
+	if d.length() <= _alcance_atajada and area_propia.has_point(balon.position):
+		_agarrando = true
+		balon.agarrado = true
+		_tiempo_agarre = 1.0
 
 
 ## Patea el balón. Devuelve true si lo alcanzó a tocar.
-##   fuerza  -> qué tan fuerte sale (más grande = más rápido)
-##   arriba  -> cuánto se levanta del piso
-##   giro_minimo -> qué tan de frente tiene que estar el balón (0 = da igual)
-func patear(fuerza: float, arriba: float, giro_minimo := 0.1) -> bool:
+func patear(fuerza: float, giro_minimo := 0.15) -> bool:
 	if balon == null or _espera_pateo > 0.0:
 		return false
-	var d: Vector3 = balon.global_position - global_position
-	d.y = 0.0
+	var d: Vector2 = balon.position - position
 	var distancia := d.length()
-	if distancia > 2.3 or distancia < 0.01:
+	if distancia > RADIO + Balon.RADIO + 1.0 or distancia < 0.01:
 		return false
 	if hacia.dot(d / distancia) < giro_minimo:
 		return false
-	_espera_pateo = 0.4
-	balon.apply_central_impulse((hacia * fuerza + Vector3.UP * arriba) * balon.mass)
+	_espera_pateo = 0.35
+	if _agarrando:
+		_agarrando = false
+		balon.agarrado = false
+	balon.velocidad = hacia * fuerza
 	return true
 
 
-func _pieza(tam: Vector3, pos: Vector3, color: Color) -> MeshInstance3D:
-	var malla := MeshInstance3D.new()
-	var caja := BoxMesh.new()
-	caja.size = tam
-	malla.mesh = caja
-	malla.position = pos
-	malla.material_override = _material(color, 0.85)
-	add_child(malla)
-	return malla
+# ------------------------------------------------------- si lo manejas tú ---
+
+func _leer_entrada() -> void:
+	var v := Vector2.ZERO
+	# Teclado, para probar en la compu.
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		v.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		v.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		v.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		v.y += 1.0
+	# Joystick del celular.
+	if controles != null:
+		v += controles.mover
+	if v.length() > 1.0:
+		v = v.normalized()
+	direccion = v
+
+	var tirar := Input.is_key_pressed(KEY_SPACE)
+	var pasar := Input.is_key_pressed(KEY_SHIFT)
+	if controles != null:
+		tirar = tirar or controles.disparar
+		pasar = pasar or controles.pasar
+
+	if en_penal:
+		# Tirando un penal: se apunta con el joystick (arriba/abajo) y se dispara.
+		direccion = Vector2.ZERO
+		if tirar and _espera_pateo <= 0.0:
+			var altura := 0.0
+			if controles != null:
+				altura = clampf(controles.mover.y * 3.2, -3.0, 3.0)
+			var objetivo := Vector2(arco_rival, altura)
+			hacia = (objetivo - position).normalized()
+			rotation = angulo_hacia(hacia)
+			patear(24.0, 0.0)
+		return
+
+	if tirar:
+		patear(19.0)
+	elif pasar:
+		patear(12.0)
 
 
-func _material(color: Color, rugosidad: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	m.roughness = rugosidad
-	return m
+# ----------------------------------------------------------- si juega solo ---
+
+func _pensar() -> void:
+	if balon == null:
+		direccion = Vector2.ZERO
+		return
+
+	var b: Vector2 = balon.position
+	var signo := signf(arco_rival - arco_propio)
+	var distancia := position.distance_to(b)
+
+	if rol == Rol.ARQUERO:
+		_pensar_arquero(b, distancia)
+		return
+
+	var mio: bool = dueno_balon != null and dueno_balon.equipo == equipo
+	var libre := dueno_balon == null
+
+	# 1) Yo tengo el balón: voy derecho al arco rival.
+	if dueno_balon == self:
+		var destino := Vector2(arco_rival - signo * 8.0, clampf(b.y * 0.5, -8.0, 8.0))
+		direccion = destino - position
+		_quizas_patear(signo)
+		return
+
+	# 2) El más cercano de mi equipo va a presionar (si el balón está libre o es del rival).
+	if soy_mas_cercano and (libre or not mio):
+		direccion = b - position
+		return
+
+	# 3) Si la tiene mi equipo, acompaño el ataque según mi rol.
+	if mio:
+		var destino := formacion
+		match rol:
+			Rol.DEFENSA:
+				destino = formacion + Vector2(signo * 7.0, 0.0)
+			Rol.MEDIO:
+				destino = formacion + Vector2(signo * 12.0, 0.0)
+			Rol.DELANTERO:
+				destino = Vector2(arco_rival - signo * 9.0, clampf(b.y * 0.6, -6.0, 6.0))
+		destino = destino.lerp(b, 0.25)
+		direccion = destino - position
+		return
+
+	# 4) La tiene el rival: defiendo según mi rol.
+	var objetivo := position
+	match rol:
+		Rol.DEFENSA:
+			var marca = _rival_peligroso()
+			if marca != null:
+				var suyo: Vector2 = marca.position
+				objetivo = suyo + (Vector2(arco_propio, 0.0) - suyo).normalized() * 3.2
+			else:
+				objetivo = b + (Vector2(arco_propio, 0.0) - b).normalized() * 6.0
+		Rol.MEDIO:
+			# Presiona por el lado de mi arco.
+			objetivo = b + (Vector2(arco_propio, 0.0) - b).normalized() * 4.0
+		Rol.DELANTERO:
+			# Se queda arriba, listo para el contragolpe.
+			objetivo = formacion + Vector2(0.0, (b.y - formacion.y) * 0.4)
+	direccion = objetivo - position
+	if direccion.length() < 0.2:
+		direccion = Vector2.ZERO
+
+
+func _pensar_arquero(b: Vector2, distancia: float) -> void:
+	if _agarrando:
+		direccion = Vector2.ZERO
+		return
+	var signo := signf(arco_rival - arco_propio)
+	var linea_x := arco_propio + signo * 1.5
+	var objetivo := Vector2(linea_x, clampf(b.y, -3.0, 3.0))
+	# Si el balón entra al área, sale a atajarlo.
+	if area_propia.has_point(b) and distancia < 11.0:
+		objetivo = b
+	direccion = objetivo - position
+	if direccion.length() < 0.15:
+		direccion = Vector2.ZERO
+
+
+## Si tengo el balón y estoy cerca del arco rival, le pego.
+func _quizas_patear(signo: float) -> void:
+	if _espera_pateo > 0.0 or not puede_tocar:
+		return
+	if hacia.dot(Vector2(signo, 0.0)) < 0.5:
+		return                       # no estoy mirando hacia el arco
+	var dist_arco := absf(arco_rival - position.x)
+	if dist_arco < 14.0:
+		patear(20.0, 0.0)
+	elif dist_arco < 26.0:
+		patear(15.0, 0.0)            # despeje largo
+
+
+## El rival de campo más peligroso: el que está más cerca de mi arco.
+func _rival_peligroso():
+	var mejor = null
+	var mejor_distancia := 1000000.0
+	for f in todos:
+		if f.equipo == equipo:
+			continue
+		if f.rol == Rol.ARQUERO:
+			continue
+		var d: float = absf(f.position.x - arco_propio)
+		if d < mejor_distancia:
+			mejor_distancia = d
+			mejor = f
+	return mejor
+
+
+## Hacia dónde tiene que girar el nodo para mirar en esa dirección.
+func angulo_hacia(destino: Vector2) -> float:
+	return atan2(destino.x, -destino.y)
+
+
+func _draw() -> void:
+	# Sombra.
+	draw_circle(Vector2(0.10, 0.18), RADIO, Color(0.0, 0.0, 0.0, 0.22))
+
+	# Si me están controlando, un aro amarillo para no perderme.
+	if controlado:
+		draw_circle(Vector2.ZERO, RADIO + 0.30, Color(1.0, 0.90, 0.10, 0.30))
+		draw_arc(Vector2.ZERO, RADIO + 0.28, 0.0, TAU, 40, Color(1.0, 0.90, 0.10), 0.16)
+
+	# Cuerpo (la camiseta).
+	draw_circle(Vector2.ZERO, RADIO, color_camiseta)
+	draw_arc(Vector2.ZERO, RADIO, 0.0, TAU, 40, Color(0.0, 0.0, 0.0, 0.32), 0.11)
+
+	# Las manitas del arquero: un tercio de su tamaño.
+	if rol == Rol.ARQUERO:
+		var mat_mano := color_piel
+		draw_circle(Vector2(-RADIO * 0.92, -RADIO * 0.50), MANITA, mat_mano)
+		draw_circle(Vector2(RADIO * 0.92, -RADIO * 0.50), MANITA, mat_mano)
+		draw_arc(Vector2(-RADIO * 0.92, -RADIO * 0.50), MANITA, 0.0, TAU, 20, Color(0.0, 0.0, 0.0, 0.30), 0.07)
+		draw_arc(Vector2(RADIO * 0.92, -RADIO * 0.50), MANITA, 0.0, TAU, 20, Color(0.0, 0.0, 0.0, 0.30), 0.07)
+
+	# Pelo (atrás) y cara (adelante): así se ve hacia dónde mira.
+	draw_circle(Vector2(0.0, 0.12), RADIO * 0.62, color_pelo)
+	draw_circle(Vector2(0.0, -0.10), RADIO * 0.52, color_piel)
+
+	# El número, siempre derecho aunque el jugador gire.
+	draw_set_transform(Vector2.ZERO, -rotation, Vector2.ONE)
+	var fuente := ThemeDB.fallback_font
+	var tam := int(RADIO * 1.00)
+	draw_string(fuente, Vector2(-RADIO, float(tam) * 0.35), str(numero),
+		HORIZONTAL_ALIGNMENT_CENTER, RADIO * 2.0, tam, color_numero)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

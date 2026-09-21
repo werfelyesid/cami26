@@ -1,12 +1,13 @@
 extends CanvasLayer
-## El marcador de arriba: los goles, el reloj, los mensajes grandes
-## ("¡GOOOL!") y el botón de pausa.
+## El marcador de arriba: los goles, el reloj, en qué parte del partido vamos,
+## los mensajes grandes ("¡GOOOL!") y el botón de pausa.
 
 ## Aviso para la escena del partido: el jugador apretó pausa.
 signal pausa_pedida
 
 var marcador: Label
 var reloj: Label
+var franja: Label
 var mensaje: Label
 
 var _espera_mensaje := 0.0
@@ -16,22 +17,31 @@ func _ready() -> void:
 	# --- barra de arriba ---
 	var barra := HBoxContainer.new()
 	barra.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	barra.offset_top = 12.0
-	barra.offset_bottom = 74.0
+	barra.offset_top = 10.0
+	barra.offset_bottom = 62.0
 	barra.alignment = BoxContainer.ALIGNMENT_CENTER
-	barra.add_theme_constant_override("separation", 36)
+	barra.add_theme_constant_override("separation", 30)
 	add_child(barra)
 
-	marcador = _etiqueta(38)
+	marcador = _etiqueta(34)
 	marcador.text = "TÚ  0  -  0  RIVAL"
 	barra.add_child(marcador)
 
-	reloj = _etiqueta(38)
+	reloj = _etiqueta(34)
 	reloj.text = "0:00"
 	barra.add_child(reloj)
 
+	# --- franja: en qué parte vamos ---
+	franja = _etiqueta(20)
+	franja.text = ""
+	franja.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	franja.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	franja.offset_top = 64.0
+	franja.offset_bottom = 96.0
+	add_child(franja)
+
 	# --- mensajes grandes en el centro ---
-	mensaje = _etiqueta(96)
+	mensaje = _etiqueta(90)
 	mensaje.text = ""
 	mensaje.visible = false
 	mensaje.set_anchors_preset(Control.PRESET_CENTER)
@@ -61,12 +71,15 @@ func _process(delta: float) -> void:
 			mensaje.visible = false
 
 
-## Actualiza los goles y el reloj.
-func actualizar(goles_tuyos: int, goles_rival: int, segundos: float) -> void:
+## Actualiza los goles, el reloj y la franja de abajo.
+func actualizar(goles_tuyos: int, goles_rival: int, segundos: float, fase: String, extra := "") -> void:
 	marcador.text = "TÚ  %d  -  %d  RIVAL" % [goles_tuyos, goles_rival]
 	var minutos := int(segundos) / 60
 	var segs := int(segundos) % 60
 	reloj.text = "%d:%02d" % [minutos, segs]
+	franja.text = fase
+	if extra != "":
+		franja.text = "%s   ·   %s" % [fase, extra]
 
 
 ## Muestra un texto grande en el centro durante unos segundos.

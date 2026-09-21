@@ -1,75 +1,74 @@
-extends RigidBody3D
-## El balón del partido: una esfera que rueda y rebota.
+extends CharacterBody2D
+## El balón del partido: rueda, se frena y rebota contra los muros y los palos.
 ##
-## Se construye todo por código (forma, malla y material) para que no haya
-## que dibujar nada en el editor.
+## Está bien grandote para que se vea en el celular.
+##
+## Capas de choque (para que no se enrede con los jugadores):
+##   capa 1 = muros y palos   |   capa 2 = jugadores   |   capa 4 = balón
+## El balón choca SOLO con la capa 1: a los jugadores los empuja el regate,
+## que se calcula a mano en futbolista.gd.
 
-## Radio del balón en metros (un balón de verdad mide 0,11 m de radio,
-## pero aquí lo hacemos un poco más grande para que se vea bien).
-const RADIO := 0.22
+## Radio en metros (un balón de verdad mide 0,11 m... ¡este es de mentira!).
+const RADIO := 1.0
+const FRENADO := 1.1          # cuánto se va frenando por segundo
+const REBOTE := 0.72          # con cuánta fuerza sale después de chocar
+const VELOCIDAD_MAXIMA := 24.0
+
+## Hacia dónde y qué tan rápido va (en metros por segundo).
+var velocidad := Vector2.ZERO
+## Si el arquero lo tiene en las manos, no se mueve solo.
+var agarrado := false
 
 
 func _ready() -> void:
-	mass = 0.45
-	gravity_scale = 1.1
-	continuous_cd = true      # evita que el balón atraviese las porterías
-	linear_damp = 0.12
-	angular_damp = 0.6
-	can_sleep = false         # el balón nunca se "duerme"
-
-	# --- choque ---
-	var forma := SphereShape3D.new()
+	collision_layer = 4
+	collision_mask = 1
+	var forma := CircleShape2D.new()
 	forma.radius = RADIO
-	var choque := CollisionShape3D.new()
+	var choque := CollisionShape2D.new()
 	choque.shape = forma
 	add_child(choque)
 
-	# --- cómo rebota ---
-	var fisica := PhysicsMaterial.new()
-	fisica.bounce = 0.55
-	fisica.friction = 0.7
-	physics_material_override = fisica
 
-	# --- se ve ---
-	var malla := MeshInstance3D.new()
-	var esfera := SphereMesh.new()
-	esfera.radius = RADIO
-	esfera.height = RADIO * 2.0
-	esfera.radial_segments = 20
-	esfera.rings = 12
-	malla.mesh = esfera
-	malla.material_override = _material(Color(0.96, 0.96, 0.94), 0.35)
-	add_child(malla)
+func _physics_process(delta: float) -> void:
+	if agarrado:
+		queue_redraw()
+		return
 
-	# Los "parches" negros del balón (seis manchas repartidas).
-	var mat_parche := _material(Color(0.09, 0.10, 0.12), 0.4)
-	var puntos := [
-		Vector3(0, 1, 0), Vector3(0, -1, 0),
-		Vector3(1, 0, 0), Vector3(-1, 0, 0),
-		Vector3(0, 0, 1), Vector3(0, 0, -1),
-	]
-	for p in puntos:
-		var parche := MeshInstance3D.new()
-		var bolita := SphereMesh.new()
-		bolita.radius = 0.075
-		bolita.height = 0.15
-		bolita.radial_segments = 12
-		bolita.rings = 6
-		parche.mesh = bolita
-		parche.material_override = mat_parche
-		parche.position = p * (RADIO - 0.02)
-		add_child(parche)
+	if velocidad.length() > VELOCIDAD_MAXIMA:
+		velocidad = velocidad.normalized() * VELOCIDAD_MAXIMA
+
+	# Se mueve en dos pasitos chiquitos: así no se atraviesa los palos.
+	for i in 2:
+		var choque := move_and_collide(velocidad * delta * 0.5)
+		if choque != null:
+			velocidad = velocidad.bounce(choque.get_normal()) * REBOTE
+
+	# Se va frenando.
+	velocidad = velocidad.lerp(Vector2.ZERO, clampf(FRENADO * delta, 0.0, 1.0))
+	if velocidad.length() < 0.25:
+		velocidad = Vector2.ZERO
+
+	# La rotación es solo para que se vea que rueda.
+	rotation += velocidad.length() * delta * 1.2
+	queue_redraw()
 
 
-## Devuelve el balón a un lugar, quietecito (se usa en el saque de centro).
-func reiniciar(posicion: Vector3) -> void:
-	linear_velocity = Vector3.ZERO
-	angular_velocity = Vector3.ZERO
-	global_position = posicion
+## Deja el balón quietecito en un lugar (saque de centro o penal).
+func reiniciar(posicion: Vector2) -> void:
+	velocidad = Vector2.ZERO
+	agarrado = false
+	position = posicion
+	queue_redraw()
 
 
-func _material(color: Color, rugosidad: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	m.roughness = rugosidad
-	return m
+func _draw() -> void:
+	draw_circle(Vector2(0.14, 0.24), RADIO, Color(0.0, 0.0, 0.0, 0.25))   # sombra
+	draw_circle(Vector2.ZERO, RADIO, Color(0.97, 0.97, 0.95))
+	draw_arc(Vector2.ZERO, RADIO, 0.0, TAU, 36, Color(0.15, 0.15, 0.18), 0.10)
+	# Las manchas: al girar el balón, parece rodar.
+	draw_circle(Vector2(-RADIO * 0.42, -RADIO * 0.30), RADIO * 0.30, Color(0.12, 0.12, 0.15))
+	draw_circle(Vector2(RADIO * 0.40, -RADIO * 0.36), RADIO * 0.24, Color(0.12, 0.12, 0.15))
+	draw_circle(Vector2(RADIO * 0.05, RADIO * 0.45), RADIO * 0.26, Color(0.12, 0.12, 0.15))
+	draw_circle(Vector2(-RADIO * 0.30, RADIO * 0.40), RADIO * 0.18, Color(0.12, 0.12, 0.15))
+	draw_circle(Vector2(RADIO * 0.52, RADIO * 0.10), RADIO * 0.16, Color(0.12, 0.12, 0.15))
