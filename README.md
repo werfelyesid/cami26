@@ -156,11 +156,18 @@ También hay lanzadores en el menú de aplicaciones: **cami26 — Jugar** y
 cami26/
 ├── project.godot          Configuración: pantalla horizontal, motor liviano, autoloads
 ├── icon.svg               El ícono del juego
+├── datos/
+│   ├── clubes.json        LaLiga: los 20 clubes con su plantilla, táctica y colores
+│   └── escudos/           Los escudos de los clubes (se llenan en otra fase)
 ├── scenes/
 │   ├── main_menu.tscn     Escena que arranca (el menú)
 │   └── partido.tscn       Escena del partido (solo apunta al script)
 └── scripts/
     ├── ajustes.gd         Dificultad (fácil / normal / difícil). Se carga sola
+    ├── datos.gd           El progreso: monedas, gemas, cartas y carrera.
+    │                      Se carga sola y se guarda en user://partida.json
+    ├── clubes.gd          Lee datos/clubes.json: los clubes, las plantillas
+    │                      (titulares y banquillo) y el OVR de cada jugador
     ├── main_menu.gd       Menú: JUGAR, dificultad, CÓMO JUGAR, SALIR
     ├── cancha.gd          Dibuja césped, líneas, arcos, redes y gradas con gente.
     │                      También crea los muros y los palos
@@ -192,6 +199,41 @@ cami26/
 El balón **no choca** con los jugadores: el regate y el "tapar la pateada" se
 calculan a mano en `futbolista.gd` (`_tocar_balon` y `_bloquear_balon`). Así se
 puede jugar cómodo sin que el balón salte para cualquier lado.
+
+---
+
+## El progreso y los clubes
+
+### El guardado
+
+El progreso (monedas, gemas, cartas y la carrera) se guarda solo en
+`user://partida.json`. En Linux eso es
+`~/.local/share/godot/app_userdata/cami26/partida.json`.
+
+Si algún día cambia el formato, se sube `VERSION` en `scripts/datos.gd` y se
+convierte lo viejo dentro de `_aplicar()`. La idea es **no perder nunca** la
+partida de un jugador.
+
+### Los clubes
+
+Están en `datos/clubes.json`, que es un archivo de texto que se puede editar a
+mano. Las reglas son:
+
+- La plantilla va **en orden**: los **11 primeros son los titulares** y los que
+  siguen forman el banquillo.
+- Cada jugador usa claves cortas: `n` nombre, `p` puesto, `d` dorsal, y
+  `v` velocidad, `t` tiro, `f` físico, `r` resistencia (todas de 1 a 99).
+- El **OVR no se guarda**: se calcula solo, como el promedio de las cuatro.
+- Los puestos que existen son `POR`, `LD`, `LI`, `DFC`, `MCD`, `MC`, `MCO`,
+  `MD`, `MI`, `ED`, `EI`, `DC` y `SD`. Cada uno sabe a qué rol del partido
+  corresponde (ver `ROLES` en `scripts/clubes.gd`).
+
+Para revisar el archivo sin abrir el editor, se puede llamar a
+`Clubes.validar()`: devuelve la lista de problemas (dorsales repetidos, nombres
+repetidos, estadísticas fuera de 1-99, un club sin arquero...).
+
+⚠️ Las plantillas y los dorsales de verdad **cambian cada temporada**: los datos
+de aquí son un punto de partida editable, no una verdad absoluta.
 
 ---
 

@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 Ajustes="*res://scripts/ajustes.gd"
+Datos="*res://scripts/datos.gd"
 
 [display]
 

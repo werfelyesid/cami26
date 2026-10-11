@@ -1,0 +1,142 @@
+class_name Clubes
+extends RefCounted
+## Lee los clubes y sus plantillas desde datos/clubes.json.
+##
+## Cómo está escrito el archivo (para poder editarlo a mano):
+##   - La plantilla va EN ORDEN: los 11 primeros son los TITULARES y el resto
+##     el banquillo. Así no hace falta un campo "titular" en cada jugador.
+##   - Cada jugador usa claves cortas, para que el archivo no quede enorme:
+##       n = nombre        p = puesto        d = dorsal
+##       v = velocidad · t = tiro · f = físico · r = resistencia  (de 1 a 99)
+##   - El OVR NO se guarda: se calcula solo (promedio de las cuatro).
+##
+## Para probar que los datos están bien, hay una comprobación:
+##   Clubes.validar()  ->  devuelve la lista de problemas (vacía = todo bien)
+
+const RUTA := "res://datos/clubes.json"
+const JUGADORES_TITULARES := 11
+
+## Los puestos que se usan y a qué rol del partido corresponde cada uno.
+## Los números son los mismos del enum Rol de futbolista.gd:
+## 0 = arquero · 1 = defensa · 2 = medio · 3 = delantero
+const ROLES := {
+	"POR": 0,
+	"LD": 1, "DFC": 1, "LI": 1,
+	"MCD": 2, "MC": 2, "MCO": 2, "MD": 2, "MI": 2,
+	"ED": 3, "SD": 3, "DC": 3, "EI": 3,
+}
+
+
+## Devuelve la lista de clubes del archivo (vacía si algo salió mal).
+static func cargar_todos() -> Array:
+	if not FileAccess.file_exists(RUTA):
+		push_error("No existe el archivo de clubes: %s" % RUTA)
+		return []
+	var archivo := FileAccess.open(RUTA, FileAccess.READ)
+	if archivo == null:
+		push_error("No se pudo abrir %s" % RUTA)
+		return []
+	var texto := archivo.get_as_text()
+	archivo.close()
+
+	var leido = JSON.parse_string(texto)
+	if typeof(leido) != TYPE_DICTIONARY:
+		push_error("%s no es un JSON válido." % RUTA)
+		return []
+	var lista = leido.get("clubes", [])
+	if typeof(lista) != TYPE_ARRAY:
+		push_error("%s no tiene una lista de clubes." % RUTA)
+		return []
+	return lista
+
+
+## Busca un club por su id (por ejemplo "real_madrid"). {} si no está.
+static func buscar(id: String) -> Dictionary:
+	for club in cargar_todos():
+		if str(club.get("id", "")) == id:
+			return club
+	return {}
+
+
+## El rol del partido (0-3) que le toca a un puesto.
+static func rol_de(puesto: String) -> int:
+	return int(ROLES.get(puesto, 2))
+
+
+## El promedio de las cuatro estadísticas (el OVR de la carta), de 1 a 99.
+static func ovr(jugador: Dictionary) -> int:
+	var v := int(jugador.get("v", 50))
+	var t := int(jugador.get("t", 50))
+	var f := int(jugador.get("f", 50))
+	var r := int(jugador.get("r", 50))
+	return int(roundf(float(v + t + f + r) / 4.0))
+
+
+## Los titulares de un club (los 11 primeros de la plantilla).
+static func titulares(club: Dictionary) -> Array:
+	var plantilla = club.get("plantilla", [])
+	if typeof(plantilla) != TYPE_ARRAY:
+		return []
+	return plantilla.slice(0, mini(JUGADORES_TITULARES, plantilla.size()))
+
+
+## El banquillo de un club (los que van después de los 11).
+static func banquillo(club: Dictionary) -> Array:
+	var plantilla = club.get("plantilla", [])
+	if typeof(plantilla) != TYPE_ARRAY:
+		return []
+	if plantilla.size() <= JUGADORES_TITULARES:
+		return []
+	return plantilla.slice(JUGADORES_TITULARES)
+
+
+## Revisa el archivo entero y devuelve la lista de problemas encontrados.
+## Sirve para darse cuenta de un error de dedo sin abrir el juego.
+static func validar() -> Array:
+	var problemas: Array = []
+	var clubes := cargar_todos()
+	if clubes.is_empty():
+		problemas.append("No se cargó ningún club.")
+		return problemas
+
+	for club in clubes:
+		var nombre := str(club.get("nombre", "?"))
+		if str(club.get("id", "")) == "":
+			problemas.append("%s: le falta el id." % nombre)
+
+		var plantilla = club.get("plantilla", [])
+		if typeof(plantilla) != TYPE_ARRAY:
+			problemas.append("%s: la plantilla no es una lista." % nombre)
+			continue
+		if plantilla.size() < JUGADORES_TITULARES:
+			problemas.append("%s: solo tiene %d jugadores (mínimo %d)." % [nombre, plantilla.size(), JUGADORES_TITULARES])
+			continue
+
+		var porteros := 0
+		var dorsales := {}
+		var nombres := {}
+		for jugador in plantilla:
+			var de := str(jugador.get("n", "?"))
+			var puesto := str(jugador.get("p", ""))
+			var dorsal := int(jugador.get("d", 0))
+
+			if not ROLES.has(puesto):
+				problemas.append("%s / %s: el puesto «%s» no existe." % [nombre, de, puesto])
+			if puesto == "POR":
+				porteros += 1
+			if dorsales.has(dorsal):
+				problemas.append("%s: el dorsal %d está repetido (%s y %s)." % [nombre, dorsal, dorsales[dorsal], de])
+			dorsales[dorsal] = de
+			if nombres.has(de):
+				problemas.append("%s: «%s» está dos veces." % [nombre, de])
+			nombres[de] = true
+
+			for clave in ["v", "t", "f", "r"]:
+				var valor := int(jugador.get(clave, -1))
+				if valor < 1 or valor > 99:
+					problemas.append("%s / %s: %s está fuera de 1-99 (%d)." % [nombre, de, clave, valor])
+
+		if porteros == 0:
+			problemas.append("%s: no tiene ningún arquero." % nombre)
+
+	return problemas
