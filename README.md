@@ -158,16 +158,25 @@ cami26/
 ├── icon.svg               El ícono del juego
 ├── datos/
 │   ├── clubes.json        LaLiga: los 20 clubes con su plantilla, táctica y colores
+│   ├── cartas/            Las pieles de las cartas (PNG), generadas por código
 │   └── escudos/           Los escudos de los clubes (se llenan en otra fase)
+├── herramientas/
+│   └── generar_cartas.py  Dibuja y guarda los PNG de las cartas
 ├── scenes/
 │   ├── main_menu.tscn     Escena que arranca (el menú)
-│   └── partido.tscn       Escena del partido (solo apunta al script)
+│   ├── partido.tscn       Escena del partido (solo apunta al script)
+│   └── prueba_cartas.tscn Pantalla de prueba de las cartas
 └── scripts/
     ├── ajustes.gd         Dificultad (fácil / normal / difícil). Se carga sola
     ├── datos.gd           El progreso: monedas, gemas, cartas y carrera.
     │                      Se carga sola y se guarda en user://partida.json
     ├── clubes.gd          Lee datos/clubes.json: los clubes, las plantillas
     │                      (titulares y banquillo) y el OVR de cada jugador
+    ├── cartas.gd          Las cartas: el nivel (bronce/plata/oro/especial),
+    │                      la piel que le toca a cada una y las cartas al azar
+    ├── tarjeta.gd         Dibuja UNA carta: el OVR y el puesto arriba a la
+    │                      izquierda, el avatar, el nombre, el club y las 4 stats
+    ├── prueba_cartas.gd   Pantalla de prueba: muestra los 4 niveles de carta
     ├── main_menu.gd       Menú: JUGAR, dificultad, CÓMO JUGAR, SALIR
     ├── cancha.gd          Dibuja césped, líneas, arcos, redes y gradas con gente.
     │                      También crea los muros y los palos
@@ -202,7 +211,7 @@ puede jugar cómodo sin que el balón salte para cualquier lado.
 
 ---
 
-## El progreso y los clubes
+## El progreso, las cartas y los clubes
 
 ### El guardado
 
@@ -213,6 +222,32 @@ El progreso (monedas, gemas, cartas y la carrera) se guarda solo en
 Si algún día cambia el formato, se sube `VERSION` en `scripts/datos.gd` y se
 convierte lo viejo dentro de `_aplicar()`. La idea es **no perder nunca** la
 partida de un jugador.
+
+### Las cartas
+
+Una carta es un diccionario con los datos del jugador ya listos para pintar. El
+**nivel** lo decide el OVR, como en FIFA: **bronce** hasta 64, **plata** de 65 a 74
+y **oro** de 75 para arriba. De vez en cuando sale además una **especial**
+(brillante): es una carta normal, pero con la piel morada y dorada.
+
+La parte bonita de la carta (el fondo, el borde y el reflejo) son imágenes PNG que
+se **dibujan por código**, sin usar ninguna imagen ni diseño de FIFA:
+
+```bash
+python3 herramientas/generar_cartas.py
+```
+
+Si quieres cambiar los colores, se tocan en `ESTILOS` (arriba del todo del script)
+y se vuelven a generar. Godot solo escribe encima los datos: el OVR, el puesto, el
+nombre, el club y las 4 estadísticas.
+
+Para ver las cartas sin jugar un partido hay una pantalla de prueba: en el menú,
+el botón **CARTAS (PRUEBA)** (es temporal; en la fase 2 se cambia por los sobres).
+También se puede abrir directo:
+
+```bash
+godot --path . res://scenes/prueba_cartas.tscn
+```
 
 ### Los clubes
 

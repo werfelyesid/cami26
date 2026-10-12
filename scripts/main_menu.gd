@@ -2,6 +2,7 @@ extends Control
 ## El menú principal: JUGAR, elegir dificultad, CÓMO JUGAR y SALIR.
 
 const RUTA_PARTIDO := "res://scenes/partido.tscn"
+const RUTA_CARTAS := "res://scenes/prueba_cartas.tscn"
 
 var boton_dificultad: Button
 var panel_ayuda: PanelContainer
@@ -62,6 +63,12 @@ func _crear_botones() -> void:
 	var ayuda := _boton("CÓMO JUGAR", 26, Vector2(360.0, 66.0))
 	ayuda.pressed.connect(_mostrar_ayuda)
 	caja.add_child(ayuda)
+
+	# OJO: esto es solo para la fase 1 (ver cómo quedan las cartas).
+	# Cuando estén los sobres de verdad, este botón se cambia por el de sobres.
+	var cartas := _boton("CARTAS (PRUEBA)", 26, Vector2(360.0, 66.0))
+	cartas.pressed.connect(_ver_cartas)
+	caja.add_child(cartas)
 
 	if not OS.has_feature("mobile"):
 		var salir := _boton("SALIR", 26, Vector2(360.0, 66.0))
@@ -144,6 +151,10 @@ func _crear_ayuda() -> void:
 
 func _jugar() -> void:
 	get_tree().change_scene_to_file(RUTA_PARTIDO)
+
+
+func _ver_cartas() -> void:
+	get_tree().change_scene_to_file(RUTA_CARTAS)
 
 
 func _cambiar_dificultad() -> void:
