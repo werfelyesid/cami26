@@ -5,7 +5,7 @@ extends Control
 ## La "piel" (el fondo con el borde y el reflejo) es una imagen PNG que se
 ## genera con herramientas/generar_cartas.py. Aquí encima se escriben los datos:
 ## el OVR y el puesto arriba a la izquierda, el avatar en el medio, el nombre,
-## el club y las 4 estadísticas abajo.
+## el club y las 6 estadísticas abajo.
 ##
 ## Se coloca todo con anclas (proporciones), así la carta se puede hacer
 ## grande o chica y todo queda en su sitio.
@@ -59,7 +59,7 @@ func _armar() -> void:
 	avatar.texture = load(Cartas.AVATAR)
 	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_colocar(avatar, 0.30, 0.255, 0.40, 0.30)
+	_colocar(avatar, 0.28, 0.235, 0.44, 0.280)
 	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(avatar)
 
@@ -70,23 +70,24 @@ func _armar() -> void:
 		size.y * 0.050, _color_texto, HORIZONTAL_ALIGNMENT_CENTER)
 
 	# El nombre y el club.
-	_etiqueta(str(datos.get("nombre", "")).to_upper(), 0.05, 0.628, 0.90, 0.068,
-		size.y * 0.058, _color_texto, HORIZONTAL_ALIGNMENT_CENTER)
-	_etiqueta(str(datos.get("equipo", "")), 0.05, 0.692, 0.90, 0.048,
-		size.y * 0.040, Color(_color_texto.r, _color_texto.g, _color_texto.b, 0.82),
+	_etiqueta(str(datos.get("nombre", "")).to_upper(), 0.05, 0.535, 0.90, 0.062,
+		size.y * 0.052, _color_texto, HORIZONTAL_ALIGNMENT_CENTER)
+	_etiqueta(str(datos.get("equipo", "")), 0.05, 0.596, 0.90, 0.048,
+		size.y * 0.038, Color(_color_texto.r, _color_texto.g, _color_texto.b, 0.82),
 		HORIZONTAL_ALIGNMENT_CENTER)
 
-	# Las 4 estadísticas, en renglones.
-	var alto_fila := 0.052
-	var y := 0.752
+	# Las estadísticas, repartidas en el hueco de abajo (sirve para 4 o para 6).
+	var cuantas := Cartas.ESTADISTICAS.size()
+	var arriba := 0.660
+	var paso := 0.330 / float(cuantas)
 	for par in Cartas.ESTADISTICAS:
 		var clave: String = par[0]
-		_etiqueta(str(par[1]), 0.085, y, 0.26, alto_fila,
-			size.y * 0.050, Color(_color_texto.r, _color_texto.g, _color_texto.b, 0.80),
+		_etiqueta(str(par[1]), 0.085, arriba, 0.26, paso,
+			size.y * minf(0.048, paso * 0.92), Color(_color_texto.r, _color_texto.g, _color_texto.b, 0.80),
 			HORIZONTAL_ALIGNMENT_LEFT)
-		_etiqueta(str(int(datos.get(clave, 0))), 0.55, y, 0.365, alto_fila,
-			size.y * 0.054, _color_texto, HORIZONTAL_ALIGNMENT_RIGHT)
-		y += alto_fila
+		_etiqueta(str(int(datos.get(clave, 0))), 0.55, arriba, 0.365, paso,
+			size.y * minf(0.052, paso * 0.98), _color_texto, HORIZONTAL_ALIGNMENT_RIGHT)
+		arriba += paso
 
 
 ## Coloca un Control con anclas por proporciones (0 a 1).

@@ -32,6 +32,47 @@ var ultimo_premio: Dictionary = {}
 
 func _ready() -> void:
 	cargar()
+	_actualizar_cartas()
+
+
+## Vuelve a armar las cartas viejas desde el archivo de clubes.
+##
+## ¿Por qué? Al principio las cartas tenían solo 4 estadísticas (velocidad, tiro,
+## físico y resistencia) y el promedio se calculaba distinto. Las cartas que ya
+## estaban guardadas no tienen pase ni regate, así que mostrarían PAS 0 y REG 0.
+## Aquí se buscan en datos/clubes.json y se rehacen al día, sin perder nada más
+## (los sobres, las monedas y el resto del progreso quedan igual).
+func _actualizar_cartas() -> void:
+	var cambiadas := false
+	for i in inventario.size():
+		var carta: Dictionary = inventario[i]
+		if typeof(carta) != TYPE_DICTIONARY:
+			continue
+		if carta.has("pas") and carta.has("reg"):
+			continue
+		var al_dia := _carta_al_dia(carta)
+		if not al_dia.is_empty():
+			inventario[i] = al_dia
+		else:
+			# Si el jugador ya no está en el archivo, al menos que no muestre ceros.
+			carta["pas"] = int(carta.get("pas", carta.get("tir", 50)))
+			carta["reg"] = int(carta.get("reg", carta.get("vel", 50)))
+		cambiadas = true
+	if cambiadas:
+		guardar()
+
+
+## Busca al jugador de una carta en el archivo de clubes y la rehace al día.
+func _carta_al_dia(carta: Dictionary) -> Dictionary:
+	var nombre := str(carta.get("nombre", ""))
+	var equipo := str(carta.get("equipo", ""))
+	for club in Clubes.cargar_todos():
+		if str(club.get("nombre", "")) != equipo:
+			continue
+		for jugador in club.get("plantilla", []):
+			if str(jugador.get("n", "")) == nombre:
+				return Cartas.crear(jugador, club, bool(carta.get("especial", false)))
+	return {}
 
 
 ## Lee el guardado (si existe) y deja el progreso en memoria.

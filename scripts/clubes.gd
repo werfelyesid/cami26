@@ -7,8 +7,10 @@ extends RefCounted
 ##     el banquillo. Así no hace falta un campo "titular" en cada jugador.
 ##   - Cada jugador usa claves cortas, para que el archivo no quede enorme:
 ##       n = nombre        p = puesto        d = dorsal
-##       v = velocidad · t = tiro · f = físico · r = resistencia  (de 1 a 99)
-##   - El OVR NO se guarda: se calcula solo (promedio de las cuatro).
+##       v = velocidad · t = tiro · f = físico · r = resistencia
+##       pas = pase · reg = regate        (las 6, de 1 a 99)
+##   - El OVR NO se guarda: se calcula solo, pesando las estadísticas que
+##     importan en cada puesto (ver PESOS_OVR más abajo).
 ##
 ## Para probar que los datos están bien, hay una comprobación:
 ##   Clubes.validar()  ->  devuelve la lista de problemas (vacía = todo bien)
@@ -74,13 +76,44 @@ static func rol_de(puesto: String) -> int:
 	return int(ROLES.get(puesto, 2))
 
 
-## El promedio de las cuatro estadísticas (el OVR de la carta), de 1 a 99.
+## El promedio de una carta (el OVR) se calcula POR PUESTO, como en el FIFA: a
+## cada puesto se le pesan las estadísticas que de verdad le importan.
+##
+## Ojo: si se promediaran las 6 estadísticas parejo, los arqueros saldrían
+## siempre bronce (Courtois quedaría en 53) porque no regatean ni tiran.
+##
+## Las claves son las del archivo: v velocidad · t tiro · f físico · r resistencia
+## · pas pase · reg regate. Cada fila suma 1.
+const PESOS_OVR := {
+	"POR": {"f": 0.45, "r": 0.40, "pas": 0.15},
+	"DEF": {"f": 0.30, "r": 0.20, "v": 0.20, "pas": 0.15, "reg": 0.10, "t": 0.05},
+	"MED": {"pas": 0.30, "reg": 0.20, "r": 0.20, "v": 0.15, "f": 0.10, "t": 0.05},
+	"DEL": {"t": 0.35, "v": 0.25, "reg": 0.25, "f": 0.08, "r": 0.07},
+}
+
+## A qué grupo pertenece cada puesto (los mismos grupos que usa la herramienta
+## herramientas/agregar_estadisticas.py para inventar el pase y el regate).
+const GRUPO_PUESTO := {
+	"POR": "POR",
+	"LD": "DEF", "DFC": "DEF", "LI": "DEF",
+	"MCD": "MED", "MC": "MED", "MCO": "MED", "MD": "MED", "MI": "MED",
+	"ED": "DEL", "SD": "DEL", "DC": "DEL", "EI": "DEL",
+}
+
+
+## El grupo de un puesto: POR, DEF, MED o DEL.
+static func grupo_de(puesto: String) -> String:
+	return str(GRUPO_PUESTO.get(puesto, "MED"))
+
+
+## El OVR (el promedio de la carta), de 1 a 99, pesando las estadísticas que
+## importan en el puesto del jugador.
 static func ovr(jugador: Dictionary) -> int:
-	var v := int(jugador.get("v", 50))
-	var t := int(jugador.get("t", 50))
-	var f := int(jugador.get("f", 50))
-	var r := int(jugador.get("r", 50))
-	return int(roundf(float(v + t + f + r) / 4.0))
+	var pesos: Dictionary = PESOS_OVR[grupo_de(str(jugador.get("p", "MC")))]
+	var total := 0.0
+	for clave in pesos:
+		total += float(jugador.get(clave, 50)) * float(pesos[clave])
+	return int(roundf(total))
 
 
 ## Los titulares de un club (los 11 primeros de la plantilla).
@@ -142,7 +175,7 @@ static func validar() -> Array:
 				problemas.append("%s: «%s» está dos veces." % [nombre, de])
 			nombres[de] = true
 
-			for clave in ["v", "t", "f", "r"]:
+			for clave in ["v", "t", "f", "r", "pas", "reg"]:
 				var valor := int(jugador.get(clave, -1))
 				if valor < 1 or valor > 99:
 					problemas.append("%s / %s: %s está fuera de 1-99 (%d)." % [nombre, de, clave, valor])

@@ -182,6 +182,7 @@ cami26/
 │   ├── main_menu.tscn     Escena que arranca (el menú)
 │   ├── partido.tscn       Escena del partido (solo apunta al script)
 │   ├── sobres.tscn        La pantalla de los sobres (tienda y sobre abierto)
+│   ├── plantilla.tscn     MI PLANTILLA (armar el equipo con las cartas)
 │   └── prueba_cartas.tscn Pantalla de prueba de las cartas (fuera del menú)
 └── scripts/
     ├── ajustes.gd         Dificultad (fácil / normal / difícil). Se carga sola
@@ -191,8 +192,12 @@ cami26/
     │                      (titulares y banquillo) y el OVR de cada jugador
     ├── cartas.gd          Las cartas: el nivel (bronce/plata/oro/especial),
     │                      la piel que le toca a cada una y las cartas al azar
-    ├── tarjeta.gd         Dibuja UNA carta: el OVR y el puesto arriba a la
-    │                      izquierda, el avatar, el nombre, el club y las 4 stats
+    ├── tarjeta.gd         Dibuja UNA carta grande: el OVR y el puesto arriba a
+    │                      la izquierda, el avatar, el nombre, el club y las 6 stats
+    ├── mini_carta.gd      La carta chiquita de la plantilla (y la que se arrastra)
+    ├── plantilla.gd       MI PLANTILLA: los 11 huecos, el banquillo, arrastrar
+    │                      las cartas, las formaciones y el promedio del equipo
+    ├── cancha_mini.gd     La cancha dibujada de la pantalla de plantilla
     ├── sobres.gd          Las reglas de los sobres: precios, premios y suerte
     ├── pantalla_sobres.gd La pantalla de sobres: comprar, diario y abrir
     ├── marcas_penal.gd    Dibuja las tres zonas del arco en los penales
@@ -249,10 +254,28 @@ partida de un jugador.
 
 ### Las cartas
 
-Una carta es un diccionario con los datos del jugador ya listos para pintar. El
-**nivel** lo decide el OVR, como en FIFA: **bronce** hasta 64, **plata** de 65 a 74
-y **oro** de 75 para arriba. De vez en cuando sale además una **especial**
-(brillante): es una carta normal, pero con la piel morada y dorada.
+Cada carta muestra **6 estadísticas**, como en el FIFA: **VEL** velocidad,
+**TIR** tiro, **PAS** pase, **REG** regate, **FIS** físico y **RES** resistencia
+(todas de 1 a 99).
+
+El **OVR** (el número grande de arriba a la izquierda) **no** es el promedio de
+las 6 parejo: se calcula **por puesto**, pesando las estadísticas que de verdad
+importan ahí. Si se promediaran todas parejo, los arqueros saldrían siempre
+bronce (Courtois quedaría en 53) porque no regatean ni tiran.
+
+| Puesto | Qué pesa (y cuánto) |
+|---|---|
+| **Arquero** | físico 45% · resistencia 40% · pase 15% |
+| **Defensa** | físico 30% · resistencia 20% · velocidad 20% · pase 15% · regate 10% · tiro 5% |
+| **Medio** | pase 30% · regate 20% · resistencia 20% · velocidad 15% · físico 10% · tiro 5% |
+| **Delantero** | tiro 35% · velocidad 25% · regate 25% · físico 8% · resistencia 7% |
+
+Los pesos están en `PESOS_OVR` (`scripts/clubes.gd`) y se pueden cambiar.
+
+El **nivel** lo decide el OVR: **bronce** hasta 74, **plata** de 75 a 82 y
+**oro** de 83 para arriba. Así queda el reparto con los 325 jugadores: **27%
+bronce · 63% plata · 9% oro**. De vez en cuando sale además una **especial**
+(brillante): es una carta de oro, pero con la piel morada y dorada.
 
 La parte bonita de la carta (el fondo, el borde y el reflejo) son imágenes PNG que
 se **dibujan por código**, sin usar ninguna imagen ni diseño de FIFA:
@@ -263,7 +286,24 @@ python3 herramientas/generar_cartas.py
 
 Si quieres cambiar los colores, se tocan en `ESTILOS` (arriba del todo del script)
 y se vuelven a generar. Godot solo escribe encima los datos: el OVR, el puesto, el
-nombre, el club y las 4 estadísticas.
+nombre, el club y las 6 estadísticas.
+
+### El pase y el regate (¡son inventados!)
+
+Las 6 estadísticas son inventadas (ninguna sale de una base de datos real), pero
+el **pase** y el **regate** los calcula una herramienta con una regla fija, no al
+azar:
+
+```bash
+python3 herramientas/agregar_estadisticas.py --revisar   # solo muestra cómo quedan
+python3 herramientas/agregar_estadisticas.py             # y los escribe
+```
+
+La regla: una base por puesto (un medio pasa mejor que un defensa, un delantero
+regatea mejor que un arquero) y un ajuste según su velocidad y su tiro, más un
+toque chiquito por jugador para que no queden todos iguales. Si algún día se
+cambian los cortes de nivel, hay que cambiarlos también allí (`CORTE_PLATA`,
+`CORTE_ORO`).
 
 Para ver las cartas sin jugar un partido hay una pantalla de prueba (ya no está en
 el menú, pero se puede abrir directo):
@@ -271,6 +311,29 @@ el menú, pero se puede abrir directo):
 ```bash
 godot --path . res://scenes/prueba_cartas.tscn
 ```
+
+### MI PLANTILLA (armar el equipo)
+
+Es la pantalla donde viven las cartas: **MI PLANTILLA**, en el menú principal
+(`scripts/plantilla.gd`).
+
+- A la izquierda, la lista de tus cartas (con filtro por puesto). Las que ya
+  están en el equipo se ven con un toque verde.
+- A la derecha, la cancha con los **11 huecos** de la formación, y abajo el
+  **banquillo** (7 huecos).
+- Se arma **arrastrando**: se agarra una carta de la lista y se suelta en un
+  hueco. También funciona **tocando y tocando** (plan B, por si el dedo no
+  arrastra bien): se toca una carta y después el hueco, o al revés.
+- Si se suelta una carta sobre un hueco que ya tiene otra, **se cambian de
+  lugar**. Si se suelta sobre la lista, la carta vuelve a quedar libre.
+- **La única regla**: en el hueco del arco solo puede ir un arquero, y un
+  arquero no puede jugar de campo. Todo lo demás va donde quieras (así lo pidió
+  Camilo: "sencillo").
+- Arriba se ve el **promedio del equipo** (el promedio de las cartas que
+  pusiste) y el botón para **cambiar de formación** (4-3-3, 4-4-2 y 3-5-2).
+
+La plantilla se guarda sola en el progreso, con la posición de cada carta en el
+inventario, así que al volver está como la dejaste.
 
 ### Los sobres
 
@@ -343,6 +406,9 @@ de aquí son un punto de partida editable, no una verdad absoluta.
 | Qué tan seguido sale cada nivel | `scripts/sobres.gd` | `NIVELES` (las probabilidades, tienen que sumar 1.0) |
 | Qué trae un sobre ganado | `scripts/sobres.gd` | `MONEDAS_DEL_SOBRE` y `GEMAS_DEL_SOBRE` |
 | A partir de qué OVR algo es plata u oro | `scripts/cartas.gd` | `OVR_PLATA` y `OVR_ORO` |
+| Cuánto pesa cada estadística en el promedio | `scripts/clubes.gd` | `PESOS_OVR` |
+| Las formaciones de la plantilla | `scripts/plantilla.gd` | `FORMACIONES` |
+| Cuántos van al banquillo | `scripts/plantilla.gd` | `BANQUILLO` |
 
 ⚠️ **Si agrandas el balón, agranda el arco también**: si el balón es muy grande,
 no cabe entre el arquero y el palo y no se puede meter gol nunca.
@@ -395,6 +461,20 @@ no cabe entre el arquero y el palo y no se puede meter gol nunca.
 11. **En headless el juego corre a ~155 cuadros por segundo.** Si una prueba
     espera "400 cuadros" creyendo que son 6 segundos, en realidad espera 2,6 s y
     falla. Para medir tiempos, usar reloj de verdad (`Time.get_ticks_msec()`).
+12. **Cambiar las estadísticas de las cartas obliga a migrar las guardadas.** Al
+    pasar de 4 estadísticas a 6, las cartas que ya estaban en el progreso
+    mostraban PAS 0 y REG 0 (y su OVR viejo). Ahora `Datos._actualizar_cartas()`
+    las rehace desde `clubes.json` al cargar: nunca hay que borrarle la partida a
+    nadie.
+13. **En Godot, inferir el tipo de un valor que viene de algo sin tipo es un
+    ERROR en este proyecto** (el aviso viene como error): `var x := f()` cuando
+    `f()` devuelve Variant no compila. Se escribe `var x: Variant = f()` o,
+    mejor, se le pone tipo a la función.
+14. **Ojo al probar con dos pantallas a la vez**: la que se agrega última se
+    queda con los clics, así que un arrastre simulado termina en la otra pantalla
+    (y parece que no funciona). Al probar, una sola pantalla en el árbol.
+15. **Al refrescar una lista se liberan los nodos viejos.** Si la prueba se
+    guardó una fila y después lee `fila.indice`, está leyendo un nodo liberado.
 
 ---
 

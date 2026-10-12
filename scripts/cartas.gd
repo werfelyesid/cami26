@@ -4,13 +4,14 @@ extends RefCounted
 ##
 ## Una carta es un diccionario con los datos del jugador ya listos para pintar:
 ##   nombre, puesto, dorsal, equipo, color1, color2,
-##   vel, tir, fis, res   (las 4 estadísticas, de 1 a 99)
+##   vel, tir, pas, reg, fis, res   (las 6 estadísticas, de 1 a 99)
 ##   ovr                  (el promedio, de 1 a 99)
 ##   nivel                ("bronce", "plata" u "oro")
 ##   especial             (true si es de las brillantes y raras)
 ##
-## El nivel lo decide el OVR, como en FIFA: bronce hasta 64, plata de 65 a 74
-## y oro de 75 para arriba. El OVR es el promedio de las 4 estadísticas.
+## El nivel lo decide el OVR, como en FIFA: bronce hasta 74, plata de 75 a 82
+## y oro de 83 para arriba. El OVR se calcula con las estadísticas que importan
+## en el puesto (ver Clubes.ovr).
 
 const PIELES := {
 	"bronce": "res://datos/cartas/carta_bronce.png",
@@ -20,18 +21,20 @@ const PIELES := {
 }
 const AVATAR := "res://datos/cartas/avatar.png"
 
-const OVR_PLATA := 65
-const OVR_ORO := 75
+const OVR_PLATA := 75
+const OVR_ORO := 83
 ## Cada cuánto sale una carta especial (brillante) al azar: 6 de cada 100.
 const PROBABILIDAD_ESPECIAL := 0.06
 ## Con qué OVR mínimo puede ser especial: la especial es una carta de oro con la
 ## piel brillante, así que no tendría sentido que saliera peor que una de plata.
-const OVR_MINIMO_ESPECIAL := 75
+const OVR_MINIMO_ESPECIAL := 83
 
-## Las 4 estadísticas: la clave en la carta y cómo se muestra.
+## Las 6 estadísticas: la clave en la carta y cómo se muestra.
 const ESTADISTICAS := [
 	["vel", "VEL"],
 	["tir", "TIR"],
+	["pas", "PAS"],
+	["reg", "REG"],
 	["fis", "FIS"],
 	["res", "RES"],
 ]
@@ -66,6 +69,8 @@ static func crear(jugador: Dictionary, club: Dictionary, especial := false) -> D
 		"color2": str(club.get("color_secundario", "#111111")),
 		"vel": int(jugador.get("v", 50)),
 		"tir": int(jugador.get("t", 50)),
+		"pas": int(jugador.get("pas", 50)),
+		"reg": int(jugador.get("reg", 50)),
 		"fis": int(jugador.get("f", 50)),
 		"res": int(jugador.get("r", 50)),
 		"ovr": ovr,

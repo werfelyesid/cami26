@@ -3,6 +3,7 @@ extends Control
 
 const RUTA_PARTIDO := "res://scenes/partido.tscn"
 const RUTA_SOBRES := "res://scenes/sobres.tscn"
+const RUTA_PLANTILLA := "res://scenes/plantilla.tscn"
 
 var boton_dificultad: Button
 var panel_ayuda: PanelContainer
@@ -56,29 +57,33 @@ func _crear_botones() -> void:
 	caja.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	caja.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	caja.offset_top = 208.0
-	caja.offset_bottom = 208.0
-	caja.add_theme_constant_override("separation", 16)
+	caja.offset_top = 198.0
+	caja.offset_bottom = 198.0
+	caja.add_theme_constant_override("separation", 12)
 	add_child(caja)
 
-	var jugar := _boton("JUGAR", 40, Vector2(360.0, 84.0))
+	var jugar := _boton("JUGAR", 38, Vector2(360.0, 74.0))
 	jugar.pressed.connect(_jugar)
 	caja.add_child(jugar)
 
-	boton_dificultad = _boton("", 24, Vector2(360.0, 58.0))
+	boton_dificultad = _boton("", 22, Vector2(360.0, 52.0))
 	boton_dificultad.pressed.connect(_cambiar_dificultad)
 	caja.add_child(boton_dificultad)
 
-	var ayuda := _boton("CÓMO JUGAR", 24, Vector2(360.0, 58.0))
+	var ayuda := _boton("CÓMO JUGAR", 22, Vector2(360.0, 52.0))
 	ayuda.pressed.connect(_mostrar_ayuda)
 	caja.add_child(ayuda)
 
-	var sobres := _boton("SOBRES", 24, Vector2(360.0, 58.0))
+	var sobres := _boton("SOBRES", 22, Vector2(360.0, 52.0))
 	sobres.pressed.connect(_ver_sobres)
 	caja.add_child(sobres)
 
+	var plantilla := _boton("MI PLANTILLA", 22, Vector2(360.0, 52.0))
+	plantilla.pressed.connect(_ver_plantilla)
+	caja.add_child(plantilla)
+
 	if not OS.has_feature("mobile"):
-		var salir := _boton("SALIR", 24, Vector2(360.0, 58.0))
+		var salir := _boton("SALIR", 22, Vector2(360.0, 52.0))
 		salir.pressed.connect(_salir)
 		caja.add_child(salir)
 
@@ -177,6 +182,11 @@ func _crear_ayuda() -> void:
   Los defensas marcan y tapan los tiros, los medios presionan y los delanteros
   van a hacer los goles. Si no los manejas, juegan solos.
 
+• MI PLANTILLA: con las cartas que te salen en los sobres armas tu equipo.
+  Arrastra una carta de la lista hasta un hueco de la cancha (o tócala y
+  después toca el hueco). En el arco SOLO puede ir un arquero; los demás van
+  donde quieras. Arriba se ve el promedio de tu equipo (el OVR).
+
 • LOS PENALES: el arco se hace más grande y se parte en TRES ZONAS:
   arriba, el centro y abajo.
   - Si tiras tú: mueve el joystick (arriba/abajo) para elegir la zona; la que
@@ -238,6 +248,10 @@ func _jugar() -> void:
 
 func _ver_sobres() -> void:
 	get_tree().change_scene_to_file(RUTA_SOBRES)
+
+
+func _ver_plantilla() -> void:
+	get_tree().change_scene_to_file(RUTA_PLANTILLA)
 
 
 func _cambiar_dificultad() -> void:
