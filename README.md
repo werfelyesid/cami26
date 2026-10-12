@@ -310,6 +310,11 @@ no cabe entre el arquero y el palo y no se puede meter gol nunca.
 5. **Cuidado al borrar archivos del proyecto desde afuera de Godot**: si borras un
    script que otra escena usa, el juego deja de arrancar. Después de tocar archivos,
    abrir el editor y probar.
+6. **Al crear un script nuevo con `class_name`, Godot no lo conoce todavía.** Si se
+   corre el juego desde la terminal, sale
+   `Parse Error: Identifier "Cartas" not declared in the current scope`. No es un
+   error del código: es que falta la caché de clases. Se arregla abriendo el editor
+   una vez, o con `godot --headless --path . --import`, que la regenera.
 
 ---
 
