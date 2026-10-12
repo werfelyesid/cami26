@@ -27,8 +27,18 @@ const ROLES := {
 }
 
 
+## Lista de clubes ya leída del archivo, para no leer y analizar el JSON cada
+## vez que se pide una carta (eso hacía lentísimo sacar cartas).
+static var _cache: Array = []
+
+
 ## Devuelve la lista de clubes del archivo (vacía si algo salió mal).
+## OJO: se lee una sola vez y se guarda. Si se edita clubes.json hay que
+## reiniciar el juego para que se note el cambio.
 static func cargar_todos() -> Array:
+	if not _cache.is_empty():
+		return _cache
+
 	if not FileAccess.file_exists(RUTA):
 		push_error("No existe el archivo de clubes: %s" % RUTA)
 		return []
@@ -47,7 +57,8 @@ static func cargar_todos() -> Array:
 	if typeof(lista) != TYPE_ARRAY:
 		push_error("%s no tiene una lista de clubes." % RUTA)
 		return []
-	return lista
+	_cache = lista
+	return _cache
 
 
 ## Busca un club por su id (por ejemplo "real_madrid"). {} si no está.

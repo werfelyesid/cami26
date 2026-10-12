@@ -25,6 +25,9 @@ var plantilla: Dictionary = {"titulares": [], "banquillo": []}
 var carrera: Dictionary = {}
 ## Fecha (YYYY-MM-DD) del último sobre diario que se reclamó.
 var ultimo_sobre_diario := ""
+## El premio del último sobre abierto, para que lo muestre la pantalla que viene
+## después. OJO: esto NO se guarda en el archivo, es solo un recado entre escenas.
+var ultimo_premio: Dictionary = {}
 
 
 func _ready() -> void:
@@ -115,6 +118,16 @@ func agregar_carta(carta: Dictionary) -> int:
 	inventario.append(carta)
 	guardar()
 	return inventario.size() - 1
+
+
+## Entrega de una sola vez todo lo que trae un sobre: la carta y la plata.
+## Se guarda una sola vez, en vez de tres (más rápido y más seguro).
+func entregar_premio(carta: Dictionary, monedas_premio: int, gemas_premio: int) -> void:
+	if not carta.is_empty():
+		inventario.append(carta)
+	monedas = maxi(0, monedas + monedas_premio)
+	gemas = maxi(0, gemas + gemas_premio)
+	guardar()
 
 
 ## Borra todo el progreso (útil mientras se prueba).

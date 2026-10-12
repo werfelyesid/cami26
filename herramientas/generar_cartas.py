@@ -11,7 +11,7 @@ Uso:
     python3 herramientas/generar_cartas.py
 
 Escribe en datos/cartas/: carta_bronce.png, carta_plata.png, carta_oro.png,
-carta_especial.png y avatar.png
+carta_especial.png, avatar.png y sobre.png
 """
 
 import os
@@ -120,6 +120,58 @@ def hacer_avatar(ancho=256, alto=256):
     return img.resize((ancho, alto), Image.LANCZOS)
 
 
+def hacer_sobre(ancho=320, alto=420):
+    """El sobre cerrado: un paquete oscuro con una cinta dorada en diagonal."""
+    w, h = ancho * ESCALA, alto * ESCALA
+    radio = int(ancho * 0.06) * ESCALA
+
+    img = degradado((64, 42, 150), (12, 10, 40), w, h)
+    img = Image.alpha_composite(img, reflejo(w, h, radio, (255, 255, 255), 45))
+
+    dibujo = ImageDraw.Draw(img)
+
+    # La cinta dorada, en diagonal (de abajo a la izquierda hacia arriba a la derecha).
+    ax, ay = int(w * 0.02), int(h * 1.05)
+    bx, by = int(w * 0.98), int(h * -0.05)
+    dx, dy = bx - ax, by - ay
+    largo = (dx * dx + dy * dy) ** 0.5
+    medio = int(w * 0.075)
+    # Desplazamiento perpendicular a la cinta.
+    nx, ny = -dy / largo * medio, dx / largo * medio
+    dibujo.polygon(
+        [(ax + nx, ay + ny), (bx + nx, by + ny), (bx - nx, by - ny), (ax - nx, ay - ny)],
+        fill=(255, 202, 64, 255),
+    )
+    # Una línea clara dentro de la cinta, para que se vea con volumen.
+    medio2 = int(w * 0.026)
+    nx2, ny2 = -dy / largo * medio2, dx / largo * medio2
+    dibujo.polygon(
+        [(ax + nx2, ay + ny2), (bx + nx2, by + ny2), (bx - nx2, by - ny2), (ax - nx2, ay - ny2)],
+        fill=(255, 240, 190, 150),
+    )
+
+    # Un emblema redondo en el centro.
+    r = int(w * 0.13)
+    cx, cy = w // 2, int(h * 0.47)
+    dibujo.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(22, 16, 60, 255),
+                   outline=(255, 214, 92, 255), width=6 * ESCALA)
+
+    # El borde grueso y una línea clara por dentro.
+    grosor = 8 * ESCALA
+    dibujo.rounded_rectangle(
+        (grosor // 2, grosor // 2, w - 1 - grosor // 2, h - 1 - grosor // 2),
+        radius=max(2, radio - grosor // 2), outline=(255, 214, 92, 255), width=grosor,
+    )
+    inset = grosor + 10 * ESCALA
+    dibujo.rounded_rectangle(
+        (inset, inset, w - 1 - inset, h - 1 - inset),
+        radius=max(2, radio - inset), outline=(255, 255, 255, 80), width=2 * ESCALA,
+    )
+
+    img.putalpha(mascara_carta(w, h, radio))
+    return img.resize((ancho, alto), Image.LANCZOS)
+
+
 def main():
     os.makedirs(SALIDA, exist_ok=True)
     for nombre, (arriba, abajo, borde, brillo) in ESTILOS.items():
@@ -131,6 +183,10 @@ def main():
     ruta_avatar = os.path.join(SALIDA, "avatar.png")
     hacer_avatar().save(ruta_avatar)
     print("escrito:", ruta_avatar, (256, 256))
+
+    ruta_sobre = os.path.join(SALIDA, "sobre.png")
+    hacer_sobre().save(ruta_sobre)
+    print("escrito:", ruta_sobre, (320, 420))
 
 
 if __name__ == "__main__":

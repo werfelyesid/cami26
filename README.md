@@ -158,14 +158,15 @@ cami26/
 ├── icon.svg               El ícono del juego
 ├── datos/
 │   ├── clubes.json        LaLiga: los 20 clubes con su plantilla, táctica y colores
-│   ├── cartas/            Las pieles de las cartas (PNG), generadas por código
+│   ├── cartas/            Las pieles de las cartas y el sobre (PNG), por código
 │   └── escudos/           Los escudos de los clubes (se llenan en otra fase)
 ├── herramientas/
-│   └── generar_cartas.py  Dibuja y guarda los PNG de las cartas
+│   └── generar_cartas.py  Dibuja y guarda los PNG de las cartas y del sobre
 ├── scenes/
 │   ├── main_menu.tscn     Escena que arranca (el menú)
 │   ├── partido.tscn       Escena del partido (solo apunta al script)
-│   └── prueba_cartas.tscn Pantalla de prueba de las cartas
+│   ├── sobres.tscn        La pantalla de los sobres (tienda y sobre abierto)
+│   └── prueba_cartas.tscn Pantalla de prueba de las cartas (fuera del menú)
 └── scripts/
     ├── ajustes.gd         Dificultad (fácil / normal / difícil). Se carga sola
     ├── datos.gd           El progreso: monedas, gemas, cartas y carrera.
@@ -176,8 +177,11 @@ cami26/
     │                      la piel que le toca a cada una y las cartas al azar
     ├── tarjeta.gd         Dibuja UNA carta: el OVR y el puesto arriba a la
     │                      izquierda, el avatar, el nombre, el club y las 4 stats
+    ├── sobres.gd          Las reglas de los sobres: precios, premios y suerte
+    ├── pantalla_sobres.gd La pantalla de sobres: comprar, diario y abrir
+    ├── texto.gd           Ayuditas de texto (escribir los miles con puntos)
     ├── prueba_cartas.gd   Pantalla de prueba: muestra los 4 niveles de carta
-    ├── main_menu.gd       Menú: JUGAR, dificultad, CÓMO JUGAR, SALIR
+    ├── main_menu.gd       Menú: JUGAR, dificultad, CÓMO JUGAR, SOBRES, SALIR
     ├── cancha.gd          Dibuja césped, líneas, arcos, redes y gradas con gente.
     │                      También crea los muros y los palos
     ├── balon.gd           La pelota: rueda, se frena y rebota
@@ -241,12 +245,39 @@ Si quieres cambiar los colores, se tocan en `ESTILOS` (arriba del todo del scrip
 y se vuelven a generar. Godot solo escribe encima los datos: el OVR, el puesto, el
 nombre, el club y las 4 estadísticas.
 
-Para ver las cartas sin jugar un partido hay una pantalla de prueba: en el menú,
-el botón **CARTAS (PRUEBA)** (es temporal; en la fase 2 se cambia por los sobres).
-También se puede abrir directo:
+Para ver las cartas sin jugar un partido hay una pantalla de prueba (ya no está en
+el menú, pero se puede abrir directo):
 
 ```bash
 godot --path . res://scenes/prueba_cartas.tscn
+```
+
+### Los sobres
+
+Las reglas están en `scripts/sobres.gd` y la pantalla en
+`scripts/pantalla_sobres.gd`. Un sobre se consigue de tres formas:
+
+| Cómo | Qué trae |
+|---|---|
+| **Ganando un partido** | 1 jugador + **200 gemas** + **1.000 moneditas** |
+| **El sobre diario** (uno por día) | 1 jugador + **200 gemas** + **1.000 moneditas** |
+| **Comprándolo** | **Solo el jugador** (sin gemas ni moneditas) |
+
+- Cuesta **200 gemas** o **5.000 moneditas**.
+- Probabilidades: **bronce 55% · plata 34% · oro 10% · especial 1%**.
+- La carta **especial** es una de oro (OVR 75 o más) con la piel brillante.
+
+⚠️ **Ojo con un detalle que parece pequeño y no lo es:** el sobre COMPRADO no puede
+traer las 200 gemas. Si las trajera, saldría gratis (pagas 200 y te devuelven 200) y
+se podrían sacar cartas infinitas sin jugar. Por eso la plata solo viene en los
+sobres ganados y en el diario.
+
+Para probar la pantalla sin jugar un partido:
+
+```bash
+godot --path . res://scenes/sobres.tscn
+# y para ver cómo queda un sobre abierto:
+godot --path . res://scenes/sobres.tscn -- --simular-premio
 ```
 
 ### Los clubes
@@ -285,6 +316,10 @@ de aquí son un punto de partida editable, no una verdad absoluta.
 | Agrandar a los jugadores | `scripts/futbolista.gd` | `ESCALA` |
 | Cuántos jugadores y dónde juegan | `scripts/partido.gd` | `FORMACION` |
 | Que el arco sea más grande | `scripts/cancha.gd` | `ANCHO_PORTERIA` |
+| Cuánto cuesta un sobre | `scripts/sobres.gd` | `COSTO_GEMAS` y `COSTO_MONEDAS` |
+| Qué tan seguido sale cada nivel | `scripts/sobres.gd` | `NIVELES` (las probabilidades, tienen que sumar 1.0) |
+| Qué trae un sobre ganado | `scripts/sobres.gd` | `MONEDAS_DEL_SOBRE` y `GEMAS_DEL_SOBRE` |
+| A partir de qué OVR algo es plata u oro | `scripts/cartas.gd` | `OVR_PLATA` y `OVR_ORO` |
 
 ⚠️ **Si agrandas el balón, agranda el arco también**: si el balón es muy grande,
 no cabe entre el arquero y el palo y no se puede meter gol nunca.

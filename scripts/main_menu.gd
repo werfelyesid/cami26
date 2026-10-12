@@ -1,8 +1,8 @@
 extends Control
-## El menú principal: JUGAR, elegir dificultad, CÓMO JUGAR y SALIR.
+## El menú principal: JUGAR, elegir dificultad, CÓMO JUGAR, SOBRES y SALIR.
 
 const RUTA_PARTIDO := "res://scenes/partido.tscn"
-const RUTA_CARTAS := "res://scenes/prueba_cartas.tscn"
+const RUTA_SOBRES := "res://scenes/sobres.tscn"
 
 var boton_dificultad: Button
 var panel_ayuda: PanelContainer
@@ -25,53 +25,55 @@ func _crear_titulo() -> void:
 	var titulo := Label.new()
 	titulo.text = "CAMI26"
 	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	titulo.add_theme_font_size_override("font_size", 120)
+	titulo.add_theme_font_size_override("font_size", 104)
 	titulo.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	titulo.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	titulo.add_theme_constant_override("outline_size", 12)
 	titulo.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	titulo.offset_top = 40.0
-	titulo.offset_bottom = 190.0
+	titulo.offset_top = 24.0
+	titulo.offset_bottom = 148.0
 	add_child(titulo)
 
 	var subtitulo := Label.new()
 	subtitulo.text = "FÚTBOL 3D PARA EL CELULAR"
 	subtitulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitulo.add_theme_font_size_override("font_size", 28)
+	subtitulo.add_theme_font_size_override("font_size", 26)
 	subtitulo.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	subtitulo.offset_top = 170.0
-	subtitulo.offset_bottom = 220.0
+	subtitulo.offset_top = 148.0
+	subtitulo.offset_bottom = 192.0
 	add_child(subtitulo)
 
 
 func _crear_botones() -> void:
 	var caja := VBoxContainer.new()
-	caja.set_anchors_preset(Control.PRESET_CENTER)
+	# Arranca debajo del subtítulo (offset fijo desde arriba) y se estira solo
+	# hacia abajo, según lo que midan los botones.
+	caja.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	caja.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	caja.grow_vertical = Control.GROW_DIRECTION_BOTH
-	caja.add_theme_constant_override("separation", 20)
+	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	caja.offset_top = 208.0
+	caja.offset_bottom = 208.0
+	caja.add_theme_constant_override("separation", 16)
 	add_child(caja)
 
-	var jugar := _boton("JUGAR", 44, Vector2(360.0, 96.0))
+	var jugar := _boton("JUGAR", 40, Vector2(360.0, 84.0))
 	jugar.pressed.connect(_jugar)
 	caja.add_child(jugar)
 
-	boton_dificultad = _boton("", 26, Vector2(360.0, 66.0))
+	boton_dificultad = _boton("", 24, Vector2(360.0, 58.0))
 	boton_dificultad.pressed.connect(_cambiar_dificultad)
 	caja.add_child(boton_dificultad)
 
-	var ayuda := _boton("CÓMO JUGAR", 26, Vector2(360.0, 66.0))
+	var ayuda := _boton("CÓMO JUGAR", 24, Vector2(360.0, 58.0))
 	ayuda.pressed.connect(_mostrar_ayuda)
 	caja.add_child(ayuda)
 
-	# OJO: esto es solo para la fase 1 (ver cómo quedan las cartas).
-	# Cuando estén los sobres de verdad, este botón se cambia por el de sobres.
-	var cartas := _boton("CARTAS (PRUEBA)", 26, Vector2(360.0, 66.0))
-	cartas.pressed.connect(_ver_cartas)
-	caja.add_child(cartas)
+	var sobres := _boton("SOBRES", 24, Vector2(360.0, 58.0))
+	sobres.pressed.connect(_ver_sobres)
+	caja.add_child(sobres)
 
 	if not OS.has_feature("mobile"):
-		var salir := _boton("SALIR", 26, Vector2(360.0, 66.0))
+		var salir := _boton("SALIR", 24, Vector2(360.0, 58.0))
 		salir.pressed.connect(_salir)
 		caja.add_child(salir)
 
@@ -84,6 +86,18 @@ func _crear_botones() -> void:
 	version.offset_top = -60.0
 	version.offset_bottom = -20.0
 	add_child(version)
+
+	# Lo que el jugador lleva ganado.
+	var monedero := Label.new()
+	monedero.text = "GEMAS  %s        MONEDITAS  %s" % [
+		Texto.miles(Datos.gemas), Texto.miles(Datos.monedas)]
+	monedero.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	monedero.add_theme_font_size_override("font_size", 20)
+	monedero.add_theme_color_override("font_color", Color(1, 0.92, 0.6))
+	monedero.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	monedero.offset_top = -104.0
+	monedero.offset_bottom = -64.0
+	add_child(monedero)
 
 	_actualizar_texto_dificultad()
 
@@ -153,8 +167,8 @@ func _jugar() -> void:
 	get_tree().change_scene_to_file(RUTA_PARTIDO)
 
 
-func _ver_cartas() -> void:
-	get_tree().change_scene_to_file(RUTA_CARTAS)
+func _ver_sobres() -> void:
+	get_tree().change_scene_to_file(RUTA_SOBRES)
 
 
 func _cambiar_dificultad() -> void:

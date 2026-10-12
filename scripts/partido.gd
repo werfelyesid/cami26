@@ -760,7 +760,27 @@ func _finalizar() -> void:
 	hud.actualizar(goles_local, goles_rival, tiempo, "FINAL", "")
 
 	await get_tree().create_timer(4.0).timeout
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	_ir_al_final(goles_local > goles_rival)
+
+
+## Termina el partido y lleva a donde toca.
+## Si ganaste, primero te sale el sobre: 1 jugador + 200 gemas + 1.000 moneditas.
+func _ir_al_final(gano: bool) -> void:
+	if gano:
+		_entregar_sobre_ganado()
+		get_tree().change_scene_to_file("res://scenes/sobres.tscn")
+	else:
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+
+
+## Arma y guarda el sobre que se gana por ganar el partido.
+func _entregar_sobre_ganado() -> void:
+	var azar := RandomNumberGenerator.new()
+	azar.randomize()
+	var premio := Sobres.premio(azar, true)
+	Datos.entregar_premio(premio["carta"], int(premio["monedas"]), int(premio["gemas"]))
+	# La pantalla de sobres lo lee de aquí y lo muestra abierto.
+	Datos.ultimo_premio = premio
 
 
 # ---------------------------------------------------------------- penales ---
@@ -913,7 +933,7 @@ func _fin_penales() -> void:
 	hud.mostrar_mensaje(texto, 4.0)
 
 	await get_tree().create_timer(4.5).timeout
-	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	_ir_al_final(penales_mios > penales_rival)
 
 
 # ------------------------------------------------------------------ pausa ---

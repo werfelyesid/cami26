@@ -24,6 +24,9 @@ const OVR_PLATA := 65
 const OVR_ORO := 75
 ## Cada cuánto sale una carta especial (brillante) al azar: 6 de cada 100.
 const PROBABILIDAD_ESPECIAL := 0.06
+## Con qué OVR mínimo puede ser especial: la especial es una carta de oro con la
+## piel brillante, así que no tendría sentido que saliera peor que una de plata.
+const OVR_MINIMO_ESPECIAL := 75
 
 ## Las 4 estadísticas: la clave en la carta y cómo se muestra.
 const ESTADISTICAS := [
@@ -71,20 +74,48 @@ static func crear(jugador: Dictionary, club: Dictionary, especial := false) -> D
 	}
 
 
+## Las cartas ya armadas y separadas por nivel, para no estar recorriendo toda la
+## base de datos cada vez que se saca una carta (eso lo hacía lentísimo).
+static var _pools: Dictionary = {}
+
+
+## Todas las cartas de un nivel, ya listas para usar.
+## `nivel` puede ser "bronce", "plata", "oro", "especial" o "todos".
+## La especial es una carta de oro (OVR de 75 para arriba) con la piel brillante.
+static func pool(nivel := "todos") -> Array:
+	if _pools.has(nivel):
+		return _pools[nivel]
+
+	var lista: Array = []
+	for club in Clubes.cargar_todos():
+		var plantilla = club.get("plantilla", [])
+		if typeof(plantilla) != TYPE_ARRAY:
+			continue
+		for jugador in plantilla:
+			var carta := crear(jugador, club, nivel == "especial")
+			if nivel == "todos":
+				lista.append(carta)
+			elif nivel == "especial":
+				if bool(carta["especial"]) and int(carta["ovr"]) >= OVR_MINIMO_ESPECIAL:
+					lista.append(carta)
+			elif str(carta["nivel"]) == nivel:
+				lista.append(carta)
+
+	_pools[nivel] = lista
+	return lista
+
+
 ## Saca una carta al azar de toda la base de datos de clubes.
 ## `prob_especial` es la probabilidad de que salga brillante.
+##
+## OJO: se devuelve una COPIA de la carta. Si no, la carta guardada en el
+## inventario sería el mismo diccionario que el del pool, y cualquier cambio se
+## vería en los dos lados.
 static func aleatoria(azar: RandomNumberGenerator, prob_especial := PROBABILIDAD_ESPECIAL) -> Dictionary:
-	var clubes := Clubes.cargar_todos()
-	if clubes.is_empty():
+	var lista := pool("especial") if azar.randf() < prob_especial else pool("todos")
+	if lista.is_empty():
 		return {}
-
-	var club = clubes[azar.randi_range(0, clubes.size() - 1)]
-	var plantilla = club.get("plantilla", [])
-	if typeof(plantilla) != TYPE_ARRAY or plantilla.is_empty():
-		return {}
-
-	var jugador = plantilla[azar.randi_range(0, plantilla.size() - 1)]
-	return crear(jugador, club, azar.randf() < prob_especial)
+	return (lista[azar.randi_range(0, lista.size() - 1)] as Dictionary).duplicate(true)
 
 
 ## Convierte un color del archivo de clubes ("#00954c") en un Color de Godot.
