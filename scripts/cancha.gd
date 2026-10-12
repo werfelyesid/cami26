@@ -16,9 +16,16 @@ const LARGO := 120.0
 const MITAD_LARGO := 60.0
 const ANCHO := 76.0
 const MITAD_ANCHO := 38.0
+
+## El arco de siempre, de 10 m. El de verdad mide 7,32 m: es más ancho a
+## propósito, porque el balón y los jugadores son grandes.
 const ANCHO_PORTERIA := 10.0
-const MITAD_PORTERIA := ANCHO_PORTERIA * 0.5
+## El arco que se está usando AHORA. En los penales se agranda con poner_arco()
+## para que el pateador tenga margen y el arquero solo pueda tapar una zona.
+var ancho_porteria := ANCHO_PORTERIA
 const LARGO_RED := 2.6
+## Los muros que se arman alrededor del arco (se rehacen al cambiar el arco).
+var _muros: Array = []
 
 ## El área grande: 16,5 m de fondo y 20 m para cada lado.
 ## El arquero NO puede salirse de aquí (es donde puede usar las manos).
@@ -107,21 +114,39 @@ func _dibujar_lineas() -> void:
 
 
 func _dibujar_arcos() -> void:
+	var mp := mitad_porteria()
 	for s in [-1.0, 1.0]:
 		var x: float = s * MITAD_LARGO
 		var x_red: float = x + s * LARGO_RED
 		# La red (unas rayitas blancas).
 		var color_red := Color(1.0, 1.0, 1.0, 0.45)
-		draw_rect(_rect(x, -MITAD_PORTERIA, x_red, MITAD_PORTERIA), Color(1.0, 1.0, 1.0, 0.12))
+		draw_rect(_rect(x, -mp, x_red, mp), Color(1.0, 1.0, 1.0, 0.12))
 		for i in 11:
-			var y := -MITAD_PORTERIA + float(i) * (ANCHO_PORTERIA / 10.0)
+			var y := -mp + float(i) * (ancho_porteria / 10.0)
 			draw_line(Vector2(x, y), Vector2(x_red, y), color_red, 0.06)
 		for i in 4:
 			var xr: float = x + s * LARGO_RED * float(i) / 3.0
-			draw_line(Vector2(xr, -MITAD_PORTERIA), Vector2(xr, MITAD_PORTERIA), color_red, 0.06)
+			draw_line(Vector2(xr, -mp), Vector2(xr, mp), color_red, 0.06)
 		# Los palos (bien gruesos, para que se vean y reboten).
-		draw_circle(Vector2(x, -MITAD_PORTERIA), 0.28, PALO)
-		draw_circle(Vector2(x, MITAD_PORTERIA), 0.28, PALO)
+		draw_circle(Vector2(x, -mp), 0.28, PALO)
+		draw_circle(Vector2(x, mp), 0.28, PALO)
+
+
+## La mitad del arco que se está usando ahora (el partido la necesita para
+## saber si el balón entró).
+func mitad_porteria() -> float:
+	return ancho_porteria * 0.5
+
+
+## Cambia el ancho del arco y rearma los muros.
+## En los penales el partido lo agranda a 14 m: así las tres zonas de tiro
+## quedan separadas y el arquero solo puede tapar la suya.
+func poner_arco(ancho: float) -> void:
+	if is_equal_approx(ancho, ancho_porteria):
+		return
+	ancho_porteria = ancho
+	_crear_muros()
+	queue_redraw()
 
 
 ## Arma un Rect2 con dos esquinas, sin importar el orden.
@@ -150,11 +175,21 @@ func _color_gente(azar: RandomNumberGenerator) -> Color:
 
 func _crear_muros() -> void:
 	# OJO con las capas:
-	#   capa 1 = las líneas de la cancha. Son paredes INVISIBLES solo para los
+	#   capa 1 = los muros y las palos. Son paredes INVISIBLES solo para los
 	#            jugadores (para que no se salgan). El balón las ignora, así
 	#            que si lo tiran mal se va afuera y hay saque de banda.
 	#   capa 8 = los palos y las redes del arco. Esos sí los choca el balón
 	#            (y también los jugadores, para que no se metan en la red).
+
+	# Si ya había muros (porque cambió el arco), se sacan del árbol ya mismo
+	# para que no choquen durante un cuadro.
+	for m in _muros:
+		if is_instance_valid(m):
+			remove_child(m)
+			m.queue_free()
+	_muros.clear()
+
+	var mp := mitad_porteria()
 
 	# Bandas (arriba y abajo).
 	_muro(Vector2(0.0, MITAD_ANCHO + 0.5), Vector2(LARGO + 2.0, 1.0), 1)
@@ -162,20 +197,20 @@ func _crear_muros() -> void:
 
 	for s in [-1.0, 1.0]:
 		var x: float = s * (MITAD_LARGO + 0.5)
-		var largo := MITAD_ANCHO - MITAD_PORTERIA
-		var cy := MITAD_PORTERIA + largo * 0.5
+		var largo := MITAD_ANCHO - mp
+		var cy := mp + largo * 0.5
 		# Fondos, dejando libre la boca del arco.
 		_muro(Vector2(x, cy), Vector2(1.0, largo), 1)
 		_muro(Vector2(x, -cy), Vector2(1.0, largo), 1)
 		# El bolsillo que hay detrás del arco (la red).
 		var x_fondo: float = s * (MITAD_LARGO + LARGO_RED)
-		_muro(Vector2(x_fondo, 0.0), Vector2(1.0, ANCHO_PORTERIA + 1.0), 9)
+		_muro(Vector2(x_fondo, 0.0), Vector2(1.0, ancho_porteria + 1.0), 9)
 		var x_medio: float = s * (MITAD_LARGO + LARGO_RED * 0.5)
-		_muro(Vector2(x_medio, MITAD_PORTERIA + 0.25), Vector2(LARGO_RED, 0.5), 9)
-		_muro(Vector2(x_medio, -MITAD_PORTERIA - 0.25), Vector2(LARGO_RED, 0.5), 9)
+		_muro(Vector2(x_medio, mp + 0.25), Vector2(LARGO_RED, 0.5), 9)
+		_muro(Vector2(x_medio, -mp - 0.25), Vector2(LARGO_RED, 0.5), 9)
 		# Los palos del arco: en esos el balón REBOTA.
-		_muro(Vector2(s * MITAD_LARGO, MITAD_PORTERIA), Vector2(0.56, 0.56), 9)
-		_muro(Vector2(s * MITAD_LARGO, -MITAD_PORTERIA), Vector2(0.56, 0.56), 9)
+		_muro(Vector2(s * MITAD_LARGO, mp), Vector2(0.56, 0.56), 9)
+		_muro(Vector2(s * MITAD_LARGO, -mp), Vector2(0.56, 0.56), 9)
 
 
 func _muro(centro: Vector2, tam: Vector2, capa: int) -> void:
@@ -189,3 +224,4 @@ func _muro(centro: Vector2, tam: Vector2, capa: int) -> void:
 	var choque := CollisionShape2D.new()
 	choque.shape = forma
 	cuerpo.add_child(choque)
+	_muros.append(cuerpo)

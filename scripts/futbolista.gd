@@ -55,6 +55,27 @@ var factor_velocidad := 1.0          # 1 = normal, 1.35 = esprintando
 var _espera_especial := 0.0          # para no repetir la barrida del arquero
 var _quiere_agarrar := false         # el arquero que manejas ataja si aprietas TIRO
 
+# --- Los penales ---
+## A qué punto del arco apunta el pateador (lo pone el partido cada cuadro).
+var penal_objetivo := Vector2.ZERO
+## La mitad del arco que hay ahora (la pone el partido; en los penales el arco
+## se agranda).
+var penal_mitad_arco := 5.0
+## Hacia qué zona se tira el arquero: -1 arriba, 0 al centro, +1 abajo.
+var penal_zona := 0
+## La altura exacta (y) a la que se tira el arquero.
+var penal_y := 0.0
+## true mientras el arquero se está tirando: va derecho a su zona, SIN mirar
+## dónde va el balón (si lo mirara, atajaría todos los penales).
+var en_buceo := false
+## El arquero tocó el balón en un penal: el partido lo lee para saber que atajó.
+var penal_toco_balon := false
+
+## Qué tan rápido sale la tirida del arquero.
+const VELOCIDAD_BUCEO := 16.0
+## Qué tan rápido arranca la tirida (más alto = sale disparado).
+const ACELERACION_BUCEO := 120.0
+
 # --- Lo que le dice el partido en cada cuadro ---
 var balon = null
 var todos := []                      # todos los jugadores del partido
@@ -207,6 +228,7 @@ func _atajar(delta: float) -> void:
 		return
 	if d.length() <= _alcance_atajada and area_propia.has_point(balon.position):
 		balon.ultimo_toque = self
+		penal_toco_balon = true
 		if balon.velocidad.length() > 13.0:
 			# Pelotazo fuerte: el arquero la rechaza y el balón REBOTA.
 			var normal := d.normalized()
@@ -217,6 +239,54 @@ func _atajar(delta: float) -> void:
 			_agarrando = true
 			balon.agarrado = true
 			_tiempo_agarre = 1.0
+
+
+## Deja al jugador como nuevo para cobrar un penal.
+##
+## OJO (bug de verdad): si el arquero se quedaba con el balón "agarrado" de un
+## penal, en el siguiente el balón se le pegaba a las manos, porque nadie
+## apagaba esa marca. Por eso cada penal empieza reiniciando a todos.
+func reiniciar_para_penal() -> void:
+	_agarrando = false
+	_tiempo_agarre = 0.0
+	_quiere_agarrar = false
+	_espera_pateo = 0.0
+	_espera_especial = 0.0
+	cargando = false
+	potencia = 0.0
+	en_buceo = false
+	en_penal = false
+	penal_toco_balon = false
+	sin_tocar = false
+	sacando = false
+	quieto = false
+	direccion = Vector2.ZERO
+	velocity = Vector2.ZERO
+
+
+## Manda al arquero a tirarse a una zona del arco (los penales).
+## `zona` es solo para saber cuál fue (-1 arriba, 0 al centro, +1 abajo) y `y`
+## es la altura EXACTA a la que se tira (la calcula el partido, para que el
+## pateador y el arquero usen la misma cuenta).
+func tirarse(zona: int, y: float) -> void:
+	penal_zona = zona
+	penal_y = y
+	en_buceo = true
+	penal_toco_balon = false
+	quieto = false
+	velocidad = VELOCIDAD_BUCEO
+	aceleracion = ACELERACION_BUCEO
+
+
+## Tira un penal: apunta a la zona elegida y, entre más cargado el tiro, más
+## fuerza sale... pero más se puede desviar (hasta irse afuera del arco).
+func patear_penal(potencia_tiro: float) -> bool:
+	var t := clampf((potencia_tiro - 1.0) / 9.0, 0.0, 1.0)
+	var objetivo := penal_objetivo
+	objetivo.y += randf_range(-1.0, 1.0) * lerpf(0.15, 2.60, t)
+	hacia = (objetivo - position).normalized()
+	rotation = angulo_hacia(hacia)
+	return patear(lerpf(16.0, 30.0, t), 0.0)
 
 
 ## Patea el balón. Devuelve true si lo alcanzó a tocar.
@@ -267,9 +337,18 @@ func _leer_entrada(delta: float) -> void:
 
 	var tirar := Input.is_key_pressed(KEY_SPACE)
 	var pasar := Input.is_key_pressed(KEY_P) or Input.is_key_pressed(KEY_E)
+	# Un toque rapidito: el botón se aprieta y se suelta antes de que corra el
+	# cuadro, así que `disparar` ya volvió a false. Si no se guardara, el tiro
+	# se perdería y parecería que el botón no funciona.
+	var toque_tiro := false
+	var toque_pase := false
 	if controles != null:
 		tirar = tirar or controles.disparar
 		pasar = pasar or controles.pasar
+		toque_tiro = controles.disparo_toque
+		toque_pase = controles.pase_toque
+		controles.disparo_toque = false
+		controles.pase_toque = false
 
 	# El arquero: SHIFT es la barrida, para llegar a la pelota.
 	if rol == Rol.ARQUERO and sprint and _espera_especial <= 0.0:
@@ -283,23 +362,24 @@ func _leer_entrada(delta: float) -> void:
 	_quiere_agarrar = tirar
 
 	if en_penal:
-		# Tirando un penal: se apunta con el joystick (arriba/abajo) y se dispara.
+		# Un penal: un toque tira ya; manteniendo apretado se carga la fuerza
+		# (más fuerza, pero el tiro se puede desviar).
 		direccion = Vector2.ZERO
-		if tirar and _espera_pateo <= 0.0:
-			var altura := 0.0
-			if controles != null:
-				altura = clampf(controles.mover.y * 3.2, -3.0, 3.0)
-			var objetivo := Vector2(arco_rival, altura)
-			hacia = (objetivo - position).normalized()
-			rotation = angulo_hacia(hacia)
-			patear(24.0, 0.0)
+		if tirar:
+			cargando = true
+			potencia = clampf(potencia + delta * 6.5, 1.0, 10.0)
+		elif cargando or toque_tiro:
+			var p := potencia if cargando else 1.0
+			cargando = false
+			potencia = 0.0
+			patear_penal(p)
 		return
 
 	# El arquero no carga tiros cuando está atajando con las manos al aire.
 	if rol == Rol.ARQUERO and not _agarrando:
 		potencia = 0.0
 		cargando = false
-		if pasar:
+		if pasar or toque_pase:
 			pasar_balon()
 		return
 
@@ -313,7 +393,10 @@ func _leer_entrada(delta: float) -> void:
 			var p := potencia if potencia > 0.0 else 1.0
 			potencia = 0.0
 			disparar_con_potencia(p)
-		elif pasar:
+		elif toque_tiro:
+			# Un toque corto: sale un tiro suavecito, pero inmediato.
+			disparar_con_potencia(1.0)
+		elif pasar or toque_pase:
 			pasar_balon()
 
 
@@ -323,7 +406,7 @@ func _leer_entrada(delta: float) -> void:
 func disparar_con_potencia(p: float) -> bool:
 	var t := clampf((p - 1.0) / 9.0, 0.0, 1.0)
 	var fuerza := lerpf(13.0, 32.0, t)
-	var desvio := randf_range(-1.0, 1.0) * deg_to_rad(lerpf(1.0, 15.0, t))
+	var desvio := randf_range(-1.0, 1.0) * deg_to_rad(lerpf(1.0, 20.0, t))
 	var rumbo := hacia.rotated(desvio)
 	rotation = angulo_hacia(rumbo)
 	hacia = rumbo
@@ -506,6 +589,12 @@ func pasar_balon() -> bool:
 
 
 func _pensar_arquero(b: Vector2, _distancia: float) -> void:
+	# Si ya se tiró en un penal, va derecho a su zona y no mira el balón.
+	if en_buceo:
+		direccion = Vector2(arco_propio, penal_y) - position
+		if direccion.length() < 0.15:
+			direccion = Vector2.ZERO
+		return
 	# En un penal se queda clavado en la línea hasta que pateen (es la regla).
 	if _agarrando or quieto:
 		direccion = Vector2.ZERO

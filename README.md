@@ -14,7 +14,7 @@ y su número, como en el fútbol de verdad.
 | Control | Qué hace |
 |---|---|
 | **Joystick** (izquierda) | Mover al jugador. Si lo empujas **hasta el fondo**, el jugador **esprinta** |
-| **TIRO** (rojo) | **Mantenlo apretado para cargar la potencia** (sale la barra de abajo, de 1 a 10) y suéltalo para patear |
+| **TIRO** (rojo) | **Un toque**: el balón sale ya, con toque suave. **Manteniéndolo apretado**: se carga la potencia (sale la barra de abajo, de 1 a 10) y sale más duro... pero menos preciso |
 | **PASE** (azul) | Pase a un compañero: busca al mejor (que esté adelante y sin marca). Si no hay, toca suave hacia adelante |
 | **CAMBIAR** (amarillo) | Pasar a manejar otro jugador de tu equipo (el que esté más cerca del balón). **Si el balón está en tu área, también puedes pasar a manejar al arquero** |
 
@@ -40,15 +40,31 @@ El mouse funciona como si fuera el dedo, porque en `project.godot` está activad
 
 ## Las reglas
 
-- **90 minutos** de reloj. Ojo: **1 segundo de verdad = 1 minuto de juego**,
-  así que el partido dura 90 segundos.
+- El marcador muestra los **90 minutos** de un partido de verdad, pero el partido
+  dura **160 segundos de verdad**: en cada segundo real el reloj avanza 33,75
+  segundos de juego, así que llega al minuto 90 justo al final. (Antes duraba
+  90 segundos y el reloj corría a 1 minuto por segundo.)
 - Al **minuto 45 hay descanso** y el reloj se para **10 segundos**.
 - Si van **empatados al 90**, hay **tiempo extra hasta el 120**.
 - Y si siguen empatados... **¡8 rondas de penales!**
-  El penal se tira **desde el punto de penal** (a 11 m del arco), tú apuntas con
-  el joystick (arriba o abajo) y disparas con TIRO. El arquero **se queda clavado
-  en la línea hasta que pateas** (regla del fútbol de verdad) y recién ahí se
-  puede mover para atajar.
+
+### Los penales, con zonas
+
+El arco se agranda (de 10 m a **18 m**) y se parte en **tres zonas**: arriba,
+el centro y abajo. El balón queda **en los pies del pateador**, en el punto de
+penal (a 11 m del arco).
+
+- **Si tiras tú:** eliges la zona moviendo el joystick (arriba/abajo) y la que
+  elijas se ve **encendida en el arco**. Después, **TIRO**: un toque tira ya;
+  mantener apretado carga la fuerza (y a más fuerza, más se puede desviar).
+- **El arquero rival NO sabe para dónde va:** elige su zona **al azar en el
+  momento del tiro**. Si se tira a tu zona, ataja; si no, es gol.
+- **Si tira el rival:** el arquero es tuyo y lo mandas **tú** con los tres
+  botones (ARRIBA, CENTRO y ABAJO). Si no eliges en **4 segundos**, se tira al
+  azar. Después de que se tire, el rival patea en un ratito.
+
+Así el penal es un duelo de "¿a dónde te tiras?": 1 de cada 3 se ataja si el
+arquero acierta la zona.
 
 Cada equipo juega con esta formación (16 jugadores):
 
@@ -179,6 +195,8 @@ cami26/
     │                      izquierda, el avatar, el nombre, el club y las 4 stats
     ├── sobres.gd          Las reglas de los sobres: precios, premios y suerte
     ├── pantalla_sobres.gd La pantalla de sobres: comprar, diario y abrir
+    ├── marcas_penal.gd    Dibuja las tres zonas del arco en los penales
+    ├── interfaz_penal.gd  El cartel de los penales y los botones del arquero
     ├── texto.gd           Ayuditas de texto (escribir los miles con puntos)
     ├── prueba_cartas.gd   Pantalla de prueba: muestra los 4 niveles de carta
     ├── main_menu.gd       Menú: JUGAR, dificultad, CÓMO JUGAR, SOBRES, SALIR
@@ -203,6 +221,8 @@ cami26/
   podría meter ni un gol.
 - Área de **16,5 m** de fondo y **20 m** para cada lado. Ahí manda el arquero.
 - Punto de penal a **11 m**.
+- **En los penales el arco se agranda a 18 m** (con `poner_arco()`), para que
+  quepan las tres zonas de tiro sin que el arquero tape dos de una sola tirida.
 
 ### Capas de choque (para que nada se enrede)
 - Capa **1**: muros y palos.
@@ -308,7 +328,10 @@ de aquí son un punto de partida editable, no una verdad absoluta.
 | Quiero... | Archivo | Qué tocar |
 |---|---|---|
 | Que la cámara se acerque o se aleje | `scripts/partido.gd` | `ZOOM_ALTO` (36 = se ven 36 m de alto; más chico = más cerca) |
-| Que el partido dure más | `scripts/partido.gd` | `FIN_2T` (90 minutos) |
+| Que el partido dure más | `scripts/partido.gd` | `PARTIDO_REAL` (160 s de verdad para 90 minutos) |
+| Que el arco de los penales sea más ancho | `scripts/partido.gd` | `ARCO_PENAL` (18 m) |
+| Dónde quedan las zonas del penal | `scripts/partido.gd` | `ZONA_FRACCION` (0,55 = al 55% de la mitad del arco) |
+| Cuánto tienes para elegir la tirida del arquero | `scripts/partido.gd` | `SEGUNDOS_DECISION` (4 s) |
 | Que el descanso dure más | `scripts/partido.gd` | `SEGUNDOS_DESCANSO` |
 | Menos rondas de penales | `scripts/partido.gd` | `RONDAS_PENALES` |
 | Que el rival sea más lento | `scripts/ajustes.gd` | `VELOCIDAD_RIVAL` |
@@ -350,6 +373,28 @@ no cabe entre el arquero y el palo y no se puede meter gol nunca.
    `Parse Error: Identifier "Cartas" not declared in the current scope`. No es un
    error del código: es que falta la caché de clases. Se arregla abriendo el editor
    una vez, o con `godot --headless --path . --import`, que la regenera.
+7. **Un nodo que se dibuja a mano (`_draw`) no se vuelve a pintar solo.** Hay que
+   pedirlo con `queue_redraw()`. Las marcas de las zonas del penal no se veían
+   nunca: dibujaban una sola vez, cuando todavía estaban apagadas. Si algo se
+   dibuja por código y no aparece, esto es lo primero que hay que mirar.
+8. **Apagar SIEMPRE las marcas de "el balón está en las manos" al empezar un
+   penal.** Si el arquero se quedaba con el balón agarrado de un penal, en el
+   siguiente el balón se le pegaba a las manos y parecía que aparecía "en el
+   arquero". Ahora cada penal reinicia a los jugadores con
+   `reiniciar_para_penal()`.
+9. **Con un balón de 2 m y un arquero que llega a 2,87 m, el arco tiene que ser
+   bien ancho para que haya tres zonas de verdad.** Con el arco de 10 m, el
+   arquero parado en el centro tapaba las zonas de los lados. Por eso el arco de
+   los penales es de 18 m y las zonas van al 55%: así la tirida del arquero tapa
+   **solo su zona** (se comprobó con las 9 combinaciones de tiro y tirida).
+10. **Un toque corto se puede perder entre dos cuadros.** El botón de TIRO se
+    aprieta y se suelta antes de que corra la física, así que el jugador leía
+    "no está apretado" y no pateaba nunca: el botón parecía no funcionar. Se
+    arregla guardando el toque en una marca (`disparo_toque`) que el jugador
+    consume.
+11. **En headless el juego corre a ~155 cuadros por segundo.** Si una prueba
+    espera "400 cuadros" creyendo que son 6 segundos, en realidad espera 2,6 s y
+    falla. Para medir tiempos, usar reloj de verdad (`Time.get_ticks_msec()`).
 
 ---
 

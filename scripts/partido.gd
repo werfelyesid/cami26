@@ -22,6 +22,8 @@ const Balon = preload("res://scripts/balon.gd")
 const Jugador = preload("res://scripts/futbolista.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Controles = preload("res://scripts/controles_tactiles.gd")
+const Marcas = preload("res://scripts/marcas_penal.gd")
+const InterfazPenal = preload("res://scripts/interfaz_penal.gd")
 
 # Los roles: los mismos números que el enum de futbolista.gd.
 const ARQUERO := 0
@@ -30,15 +32,40 @@ const MEDIO := 2
 const DELANTERO := 3
 
 enum Fase { JUEGO, DESCANSO, EXTRA, PENALES, FINAL }
-enum EstadoPenal { ESPERA, EN_VUELO, RESULTADO }
+## APUNTA = todavía no pateó (se está apuntando o eligiendo a dónde tirarse).
+enum EstadoPenal { APUNTA, EN_VUELO, RESULTADO }
 
 # --- El reloj ---
-const MINUTO := 60.0                  # segundos de juego que tiene un minuto
+## Cuánto dura el partido DE VERDAD, en segundos. El marcador muestra los 90
+## minutos de siempre: así el reloj de la pantalla hace el recorrido completo
+## (minuto 45 al descanso, 90 al final) pero el partido no dura hora y media.
+const PARTIDO_REAL := 160.0
+## Segundos de juego que tiene un minuto del marcador.
+const MINUTO := (90.0 * 60.0) / PARTIDO_REAL
 const FIN_1T := 45.0 * MINUTO
 const FIN_2T := 90.0 * MINUTO
 const FIN_EXTRA := 120.0 * MINUTO
 const SEGUNDOS_DESCANSO := 10.0
 const RONDAS_PENALES := 8
+
+# --- Los penales ---
+## Las tres zonas del arco. -1 arriba, 0 al centro, +1 abajo.
+const ZONAS_PENAL := [-1, 0, 1]
+## A qué fracción de la mitad del arco queda cada zona. Ojo al cambiarla:
+##   - Si es muy grande, los tiros se van al palo.
+##   - Si es muy chica, el arquero tapa dos zonas de una sola tirida.
+const ZONA_FRACCION := 0.55
+## El arco se agranda en los penales (10 m -> 18 m). Con el arco de siempre las
+## tres zonas quedan tan juntas que el arquero taparía dos de una sola tirida.
+## (Ojo: el balón mide 2 m y el arquero llega a 2,87 m, por eso hace falta un
+## arco bien ancho para que cada zona sea solo suya.)
+const ARCO_PENAL := 18.0
+## Cuánto tiene el jugador para decidir a dónde se tira su arquero.
+const SEGUNDOS_DECISION := 4.0
+## Cuánto tarda el rival en patear después de que el arquero ya se tiró.
+const ESPERA_TRAS_TIRIDA := 0.6
+## Si el balón no pasó nada en este tiempo, el penal se da por fallado.
+const SEGUNDOS_VUELO := 3.0
 
 # --- La cancha (igual que en cancha.gd) ---
 const MITAD_LARGO := 60.0
@@ -106,12 +133,32 @@ var penales_mios := 0
 var penales_rival := 0
 var ronda_penal := 0
 var turno_mio := true
-var penal_estado := EstadoPenal.ESPERA
+var penal_estado := EstadoPenal.APUNTA
 var penal_tiempo := 0.0
+## El pateador y el arquero del penal que se está cobrando.
+var penal_tirador = null
+var penal_arquero = null
+## A qué zona del arco se está apuntando (-1, 0, +1).
+var penal_zona_tiro := 0
+## A qué zona se tiró el arquero.
+var penal_zona_arquero := 0
+## Ya se decidió a dónde se tira el arquero (el jugador o el azar).
+var penal_decidido := false
+## Lo que le queda al jugador para elegir (4 segundos).
+var penal_decision := SEGUNDOS_DECISION
+## Lo que le queda al rival para patear después de la tirida del arquero.
+var penal_espera := 0.0
+## Por qué terminó el penal: "gol", "atajada" o "afuera".
+var penal_motivo := ""
+
+var escenario = null
+var marcas = null
+var interfaz_penal = null
 
 
 func _ready() -> void:
-	add_child(Escenario.new())
+	escenario = Escenario.new()
+	add_child(escenario)
 	_crear_balon()
 	_crear_equipos()
 	_crear_camara()
@@ -229,6 +276,14 @@ func _crear_interfaz() -> void:
 	controles = Controles.new()
 	hud.add_child(controles)
 	_poner_controles()
+
+	# Las marcas de las zonas del arco y los botones del arquero (penales).
+	marcas = Marcas.new()
+	add_child(marcas)
+
+	interfaz_penal = InterfazPenal.new()
+	add_child(interfaz_penal)
+	interfaz_penal.zona_elegida.connect(_al_elegir_zona)
 
 	_crear_menu_pausa()
 
@@ -382,11 +437,46 @@ func _marcar_dueno_del_balon() -> void:
 		f.soy_mas_cercano = (f == mas_cercano[f.equipo])
 
 
+## La mitad del arco que hay AHORA. En los penales el arco se agranda, así que
+## no se puede usar una constante: hay que preguntarle a la cancha.
+func _mitad_porteria() -> float:
+	if escenario != null:
+		return escenario.mitad_porteria()
+	return MITAD_PORTERIA
+
+
+## La altura (y) a la que queda cada zona del arco.
+func _y_de_zona(zona: int) -> float:
+	return float(zona) * _mitad_porteria() * ZONA_FRACCION
+
+
+## Qué zona está eligiendo el jugador con el joystick (arriba/centro/abajo).
+func _zona_del_joystick() -> int:
+	var v := Vector2.ZERO
+	if controles != null:
+		v = controles.mover
+	# También con el teclado, para probar en la compu.
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		v.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		v.y += 1.0
+	if v.y < -0.35:
+		return -1
+	if v.y > 0.35:
+		return 1
+	return 0
+
+
+## Una zona al azar (la usa el arquero cuando no sabe para dónde va el tiro).
+func _zona_al_azar() -> int:
+	return ZONAS_PENAL[randi() % ZONAS_PENAL.size()]
+
+
 func _revisar_gol() -> void:
 	if balon == null or congelado or _en_saque:
 		return
 	var p: Vector2 = balon.position
-	if absf(p.y) >= MITAD_PORTERIA:
+	if absf(p.y) >= _mitad_porteria():
 		return
 	if p.x > MITAD_LARGO:
 		_gol(true)
@@ -676,6 +766,9 @@ func _saque_de_centro() -> void:
 	if controlado != null:
 		controlado.controlado = true
 		controlado.velocidad = VELOCIDAD_MIA
+	# Un toque pendiente no puede tirar por su cuenta.
+	controles.disparo_toque = false
+	controles.pase_toque = false
 
 
 func _parar_todos() -> void:
@@ -791,6 +884,10 @@ func _empezar_penales() -> void:
 	penales_rival = 0
 	ronda_penal = 0
 	turno_mio = true
+	# El arco se agranda: así las tres zonas quedan separadas y el arquero solo
+	# puede tapar la suya (con el arco chiquito taparía dos de una sola tirida).
+	escenario.poner_arco(ARCO_PENAL)
+	marcas.mitad = _mitad_porteria()
 	hud.mostrar_mensaje("¡PENALES!", 2.5)
 	# Que la cámara pueda llegar hasta el arco.
 	camara.limit_left = -int(MITAD_LARGO) - 30
@@ -804,21 +901,26 @@ func _empezar_penales() -> void:
 
 
 func _preparar_penal() -> void:
-	penal_estado = EstadoPenal.ESPERA
+	penal_estado = EstadoPenal.APUNTA
 	penal_tiempo = 0.0
+	penal_decidido = false
+	penal_decision = SEGUNDOS_DECISION
+	penal_espera = ESPERA_TRAS_TIRIDA
+	penal_zona_tiro = 0
+	penal_zona_arquero = 0
+	penal_motivo = ""
 
 	var equipo_tirador := 0 if turno_mio else 1
-	var tirador = _buscar(equipo_tirador, DELANTERO)
-	var arquero = _arquero_de(1 - equipo_tirador)
+	penal_tirador = _buscar(equipo_tirador, DELANTERO)
+	penal_arquero = _arquero_de(1 - equipo_tirador)
 	var signo := 1.0 if turno_mio else -1.0
 	var punto := Vector2(signo * (MITAD_LARGO - PUNTO_PENAL), 0.0)
 
 	balon.reiniciar(punto)
 
 	for f in futbolistas:
-		f.quieto = false
-		f.en_penal = false
-		if f == tirador or f == arquero:
+		f.reiniciar_para_penal()
+		if f == penal_tirador or f == penal_arquero:
 			f.visible = true
 			f.set_physics_process(true)
 			f.puede_tocar = false
@@ -830,69 +932,161 @@ func _preparar_penal() -> void:
 			f.controlado = false
 			f.position = Vector2(0.0, 300.0)
 
-	if arquero != null:
-		arquero.velocidad = 9.5
-		arquero.position = Vector2(signo * (MITAD_LARGO - 1.6), 0.0)
-		# La regla del penal: el arquero se queda clavado en la línea
-		# hasta que el otro patee. Recién ahí se puede mover.
-		arquero.quieto = true
+	if penal_arquero != null:
+		penal_arquero.velocidad = 9.5
+		penal_arquero.aceleracion = 45.0
+		penal_arquero.penal_mitad_arco = _mitad_porteria()
+		penal_arquero.position = Vector2(signo * (MITAD_LARGO - 1.6), 0.0)
+		# La regla del penal: el arquero se queda clavado en la línea hasta que
+		# el otro patee. Recién ahí se tira.
+		penal_arquero.quieto = true
 
-	if tirador != null:
-		tirador.en_penal = turno_mio
-		tirador.controlado = turno_mio
-		tirador.position = punto - Vector2(signo * 3.0, 0.0)
-		tirador.rotation = tirador.angulo_hacia(Vector2(signo, 0.0))
-		tirador.velocity = Vector2.ZERO
+	if penal_tirador != null:
+		penal_tirador.en_penal = turno_mio
+		penal_tirador.controlado = turno_mio
+		# El balón queda EN LOS PIES del pateador: se para justo detrás del
+		# punto de penal, pegadito al balón.
+		penal_tirador.position = punto - Vector2(signo * 1.3, 0.0)
+		penal_tirador.rotation = penal_tirador.angulo_hacia(Vector2(signo, 0.0))
+		penal_tirador.velocity = Vector2.ZERO
+		penal_tirador.penal_objetivo = Vector2(signo * MITAD_LARGO, 0.0)
+		# El pateador NO se mueve: si lo dejábamos jugar solo, se iba caminando
+		# y el rival nunca llegaba a patear.
+		penal_tirador.quieto = true
 
 	if turno_mio:
-		if controlado != null and controlado != tirador:
+		if controlado != null and controlado != penal_tirador:
 			controlado.controlado = false
-		controlado = tirador
+		controlado = penal_tirador
+	else:
+		# Cuando tira el rival, el que decide es el jugador: manda a su arquero
+		# con los botones (con el joystick apunta al arco, no al arquero).
+		if controlado != null:
+			controlado.controlado = false
+		controlado = null
+
+	marcas.activo = true
+	marcas.lado = signo
+	marcas.mitad = _mitad_porteria()
+	marcas.zona = 0
+	marcas.mostrar_zona_arquero = false
+	marcas.zona_arquero = 0
+	# Un toque que haya quedado "pendiente" (por ejemplo, cuando no manejabas a
+	# nadie) no puede disparar el penal solo: se limpia al empezar.
+	controles.disparo_toque = false
+	controles.pase_toque = false
+	interfaz_penal.mostrar(turno_mio)
 
 
 func _actualizar_penales(delta: float) -> void:
 	penal_tiempo += delta
-	match penal_estado:
-		EstadoPenal.ESPERA:
-			if turno_mio:
-				if balon.velocidad.length() > 8.0:
-					_soltar_arquero()
-					penal_estado = EstadoPenal.EN_VUELO
-					penal_tiempo = 0.0
-			elif penal_tiempo > 1.8:
-				_soltar_arquero()
+
+	if penal_estado == EstadoPenal.APUNTA:
+		if turno_mio:
+			# Apuntar con el joystick: la zona elegida se ve marcada en el arco.
+			penal_zona_tiro = _zona_del_joystick()
+			marcas.zona = penal_zona_tiro
+			if penal_tirador != null:
+				penal_tirador.penal_objetivo = Vector2(penal_tirador.arco_rival,
+					_y_de_zona(penal_zona_tiro))
+		elif not penal_decidido:
+			# Tienes 4 segundos para decir a dónde se tira tu arquero.
+			penal_decision -= delta
+			var elegida := _zona_del_joystick()
+			penal_zona_arquero = elegida
+			marcas.zona = elegida
+			interfaz_penal.poner_zona(elegida)
+			interfaz_penal.poner_cuenta(penal_decision)
+			if penal_decision <= 0.0:
+				# Se acabó el tiempo: el arquero se tira al azar.
+				_elegir_arquero(_zona_al_azar(), "¡sin tiempo!  se tiró al azar")
+		else:
+			# Ya se tiró el arquero: el rival patea en un ratito.
+			penal_espera -= delta
+			if penal_espera <= 0.0:
 				_tirar_penal_rival()
 				penal_estado = EstadoPenal.EN_VUELO
 				penal_tiempo = 0.0
-		EstadoPenal.EN_VUELO:
-			if penal_tiempo > 3.0:
-				_terminar_penal(false)
+
+		# Cuando el balón sale disparado, empieza el vuelo.
+		if penal_estado == EstadoPenal.APUNTA and balon.velocidad.length() > 8.0:
+			_arrancar_vuelo()
+
+	elif penal_estado == EstadoPenal.EN_VUELO:
+		# Si el arquero la tocó, atajó.
+		if penal_arquero != null and penal_arquero.penal_toco_balon:
+			balon.velocidad = Vector2.ZERO
+			_terminar_penal(false, "atajada")
+		elif penal_tiempo > SEGUNDOS_VUELO:
+			var fuera := absf(balon.position.y) > _mitad_porteria()
+			_terminar_penal(false, "afuera" if fuera else "atajada")
 
 
-## Ya pateó: ahora sí el arquero puede moverse para atajar.
-func _soltar_arquero() -> void:
-	var arquero = _arquero_de(1 if turno_mio else 0)
-	if arquero != null:
-		arquero.quieto = false
+## Ya salió el tiro.
+func _arrancar_vuelo() -> void:
+	penal_estado = EstadoPenal.EN_VUELO
+	penal_tiempo = 0.0
+	if turno_mio:
+		# El arquero del rival elige su zona AL AZAR justo cuando sale el tiro:
+		# así no puede saber para dónde va el balón.
+		_elegir_arquero(_zona_al_azar(), "")
+	elif not penal_decidido:
+		_elegir_arquero(_zona_al_azar(), "")
 
 
-func _tirar_penal_rival() -> void:
-	var tirador = _buscar(1, DELANTERO)
-	if tirador == null:
+## Manda al arquero a tirarse a una zona y avisa en pantalla.
+func _elegir_arquero(zona: int, aviso: String) -> void:
+	penal_decidido = true
+	penal_zona_arquero = zona
+	marcas.zona_arquero = zona
+	marcas.mostrar_zona_arquero = true
+	if penal_arquero != null:
+		penal_arquero.penal_mitad_arco = _mitad_porteria()
+		penal_arquero.tirarse(zona, _y_de_zona(zona))
+	interfaz_penal.cerrar_decision(aviso if aviso != ""
+		else "¡se tiró hacia %s!" % _nombre_zona(zona))
+
+
+## El jugador apretó uno de los tres botones del arquero.
+func _al_elegir_zona(zona: int) -> void:
+	if fase != Fase.PENALES or turno_mio or penal_decidido:
 		return
-	var altura := randf_range(-3.4, 3.4)
-	var objetivo := Vector2(-MITAD_LARGO, altura)
-	tirador.hacia = (objetivo - tirador.position).normalized()
-	tirador.rotation = tirador.angulo_hacia(tirador.hacia)
-	tirador.patear(24.0, 0.0)
+	if penal_estado != EstadoPenal.APUNTA:
+		return
+	_elegir_arquero(zona, "¡te tiraste hacia %s!" % _nombre_zona(zona))
 
 
-func _terminar_penal(fue_gol: bool) -> void:
+func _nombre_zona(zona: int) -> String:
+	match zona:
+		-1:
+			return "arriba"
+		1:
+			return "abajo"
+		_:
+			return "el centro"
+
+
+## El rival tira su penal: apunta a una zona al azar y le pega al balón.
+func _tirar_penal_rival() -> void:
+	if penal_tirador == null:
+		return
+	var zona := _zona_al_azar()
+	var objetivo := Vector2(penal_tirador.arco_rival,
+		_y_de_zona(zona) + randf_range(-0.9, 0.9))
+	penal_zona_tiro = zona
+	penal_tirador.hacia = (objetivo - penal_tirador.position).normalized()
+	penal_tirador.rotation = penal_tirador.angulo_hacia(penal_tirador.hacia)
+	penal_tirador.patear(24.0, 0.0)
+
+
+## Termina el penal. `motivo` dice por qué no fue gol: "atajada" o "afuera".
+func _terminar_penal(fue_gol: bool, motivo := "atajada") -> void:
 	if penal_estado == EstadoPenal.RESULTADO or terminado:
 		return
 	penal_estado = EstadoPenal.RESULTADO
 
 	if fue_gol:
+		penal_motivo = "gol"
 		if turno_mio:
 			penales_mios += 1
 			hud.mostrar_mensaje("¡GOOOL!", 1.5)
@@ -900,9 +1094,12 @@ func _terminar_penal(fue_gol: bool) -> void:
 			penales_rival += 1
 			hud.mostrar_mensaje("GOL DEL RIVAL", 1.5)
 	else:
-		hud.mostrar_mensaje("¡ATAJÓ EL ARQUERO!", 1.5)
+		penal_motivo = motivo
+		hud.mostrar_mensaje("¡ATAJÓ EL ARQUERO!" if motivo == "atajada" else "¡SE FUE AFUERA!", 1.5)
 
 	balon.velocidad = Vector2.ZERO
+	interfaz_penal.ocultar()
+	marcas.activo = false
 	hud.actualizar(goles_local, goles_rival, tiempo, _texto_fase(), _texto_extra())
 
 	await get_tree().create_timer(1.7).timeout
@@ -927,6 +1124,8 @@ func _siguiente_penal() -> void:
 
 func _fin_penales() -> void:
 	terminado = true
+	interfaz_penal.ocultar()
+	marcas.activo = false
 	var texto := "PENALES: GANASTE  %d - %d" % [penales_mios, penales_rival]
 	if penales_rival > penales_mios:
 		texto = "PENALES: PERDISTE  %d - %d" % [penales_mios, penales_rival]

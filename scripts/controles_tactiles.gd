@@ -24,6 +24,12 @@ var mover := Vector2.ZERO
 ## true mientras se tiene apretado cada botón.
 var disparar := false
 var pasar := false
+## Se ponen en true al tocar y quedan así hasta que el jugador los use.
+## Son para no perder un toque rapidito: si el botón se aprieta y se suelta
+## antes de que corra el cuadro de física, sin esto el tiro se perdería y
+## parecería que el botón no funciona.
+var disparo_toque := false
+var pase_toque := false
 ## Se pone en true al tocar CAMBIAR; el partido lo apaga cuando lo usa.
 var cambiar := false
 
@@ -88,10 +94,12 @@ func _al_tocar(indice: int, pos: Vector2) -> void:
 	if _indice_tiro == -1 and pos.distance_to(_centro_tiro) <= R_TIRO * 1.3:
 		_indice_tiro = indice
 		disparar = true
+		disparo_toque = true
 		return
 	if _indice_pase == -1 and pos.distance_to(_centro_pase) <= R_PASE * 1.4:
 		_indice_pase = indice
 		pasar = true
+		pase_toque = true
 		return
 	if _indice_cambiar == -1 and pos.distance_to(_centro_cambiar) <= R_CAMBIAR * 1.4:
 		_indice_cambiar = indice
