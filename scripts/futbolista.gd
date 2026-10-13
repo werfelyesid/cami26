@@ -63,6 +63,9 @@ var penal_objetivo := Vector2.ZERO
 var penal_mitad_arco := 5.0
 ## Hacia qué zona se tira el arquero: -1 arriba, 0 al centro, +1 abajo.
 var penal_zona := 0
+## La mitad del arco que hay AHORA (la pone el partido). La usan el arquero,
+## para quedarse en su línea, y los que tiran, para apuntar a las esquinas.
+var mitad_arco := 5.0
 ## La altura exacta (y) a la que se tira el arquero.
 var penal_y := 0.0
 ## true mientras el arquero se está tirando: va derecho a su zona, SIN mirar
@@ -160,20 +163,33 @@ func _mover(delta: float) -> void:
 	hacia = Vector2.UP.rotated(rotation)
 
 
-## El regate: el dueño del balón lo va empujando por delante.
+## El regate: el balón va PEGADO a los pies del que lo lleva.
+##
+## Antes se le daba al balón una velocidad fija (0,88 de la del jugador) y, con
+## un jugador rápido, el balón salía disparado y parecía que se le resbalaba.
+## Ahora el balón se lleva a un punto justo delante del jugador y se corrige
+## cada cuadro para que no se escape (como un elástico).
 func _tocar_balon(_delta: float) -> void:
 	if balon == null or not puede_tocar or sin_tocar:
 		return
 	var d: Vector2 = balon.position - position
 	var distancia := d.length()
-	var alcance: float = RADIO + Balon.RADIO + 0.5
+	var alcance: float = RADIO + Balon.RADIO + 1.2
 	if distancia > alcance or distancia < 0.01:
 		return
-	if hacia.dot(d / distancia) < 0.2:
-		return
+	if hacia.dot(d / distancia) < 0.1:
+		return                       # el balón está detrás: no lo empujo
 	balon.ultimo_toque = self
-	# Con el balón en los pies se corre un poquito más lento (es realista).
-	balon.velocidad = balon.velocidad.lerp(hacia * maxf(velocidad * 0.88, 5.0), 0.35)
+	# Si el balón viene rápido es porque me lo pasaron: lo recibo con el cuerpo
+	# (un balón que viene fuerte (un pase, un rechazo) no se pega de una).
+	if balon.velocidad.length() > 15.0:
+		return
+	var objetivo := position + hacia * (RADIO + Balon.RADIO * 0.7)
+	balon.velocidad = (objetivo - balon.position) * 8.0
+	# Que no vaya más rápido que el jugador: si no, se le escapa.
+	var tope: float = velocidad * 1.25
+	if balon.velocidad.length() > tope:
+		balon.velocidad = balon.velocidad.normalized() * tope
 
 
 ## Tapar la pateada: si el balón viene hacia mí y no soy el dueño, rebota en mí.
@@ -442,9 +458,16 @@ func _pensar() -> void:
 
 	# 1) Yo tengo el balón.
 	if dueno_balon == self:
-		# Si un rival me está encima, la paso a un compañero (¡las IA también pasan!).
+		var dist_arco := absf(arco_rival - position.x)
+		# Si estoy en zona de tiro y miro al arco, LE PEGO. (Antes primero
+		# miraba si había un rival cerca y pasaba la pelota; como siempre hay
+		# alguien cerca, los bots casi nunca tiraban y por eso no había goles.)
+		if dist_arco < 22.0 and hacia.dot(Vector2(signo, 0.0)) > 0.3:
+			_quizas_patear(signo)
+			return
+		# Si un rival me está encima, la paso a un compañero.
 		var marca = _rival_mas_cercano()
-		if marca != null and position.distance_to(marca.position) < 8.0:
+		if marca != null and position.distance_to(marca.position) < 5.0:
 			if _pasar_a_un_companero():
 				return
 		# Si no, sigo para el arco rival.
@@ -452,6 +475,18 @@ func _pensar() -> void:
 		direccion = destino - position
 		_quizas_patear(signo)
 		return
+
+	# 1.5) Si el balón viene hacia mí (un pase de un compañero, o un rechazo),
+	# voy a buscarlo: así los pases tienen quién los reciba.
+	# (Antes solo el más cercano iba por el balón y los pases se perdían.)
+	if libre and not soy_mas_cercano:
+		var a_mi: Vector2 = b - position
+		if a_mi.length() < 26.0 and balon.velocidad.length() > 1.0:
+			var viniendo: float = balon.velocidad.dot(a_mi.normalized())
+			if viniendo > 0.35:
+				# Me adelanto a donde va a estar el balón.
+				direccion = (b + balon.velocidad * 0.35) - position
+				return
 
 	# 2) El más cercano de mi equipo va a presionar (si el balón está libre o es del rival).
 	if soy_mas_cercano and (libre or not mio):
@@ -599,34 +634,64 @@ func _pensar_arquero(b: Vector2, _distancia: float) -> void:
 	if _agarrando or quieto:
 		direccion = Vector2.ZERO
 		return
-	# Se para SIEMPRE entre el balón y el centro del arco, como los arqueros
-	# de verdad: si el balón está lejos se queda en la línea, y si se acerca
-	# sale un poco para tapar el ángulo.
-	var centro_arco := Vector2(arco_propio, 0.0)
-	var al_balon := b - centro_arco
-	var lejos := al_balon.length()
-	if lejos < 0.1:
-		direccion = Vector2.ZERO
-		return
-	var salida := clampf(18.0 - lejos, 0.0, 7.0)
-	var objetivo := centro_arco + (al_balon / lejos) * salida
-	objetivo.y = clampf(objetivo.y, -6.5, 6.5)
+	# El arquero se queda SIEMPRE pegadito a su línea de gol (así lo pidió
+	# Camilo: antes salía hasta 7 m a tapar el ángulo y era casi imposible
+	# anotar). Lo único que hace es correrse a lo largo de la línea, siguiendo
+	# el balón, y solo acompaña la mitad del recorrido: así las esquinas del
+	# arco quedan abiertas y se puede meter gol por los lados.
+	var mitad := maxf(mitad_arco, 3.0)
+	var y_objetivo := clampf(b.y * 0.55, -(mitad - RADIO), mitad - RADIO)
+	var x_linea: float = arco_propio - signf(arco_propio) * 1.6
+	var objetivo := Vector2(x_linea, y_objetivo)
 	direccion = objetivo - position
 	if direccion.length() < 0.25:
 		direccion = Vector2.ZERO
 
 
 ## Si tengo el balón y estoy cerca del arco rival, le pego.
+##
+## OJO: antes los bots solo tiraban desde 18 m y siempre al mismo lado, y el
+## arquero los atajaba todos. Ahora tiran desde más lejos (26 m) y apuntan al
+## lado CONTRARIO del arquero, que es donde está el hueco.
 func _quizas_patear(signo: float) -> void:
 	if _espera_pateo > 0.0 or not puede_tocar:
 		return
 	if hacia.dot(Vector2(signo, 0.0)) < 0.5:
 		return                       # no estoy mirando hacia el arco
 	var dist_arco := absf(arco_rival - position.x)
-	if dist_arco < 18.0:
-		patear(20.0, 0.0)
-	elif dist_arco < 34.0:
-		patear(15.0, 0.0)            # despeje largo
+	# Muy lejos: no tires (el balón frena y llega muerto). Mejor seguir jugando.
+	if dist_arco > 26.0:
+		return
+	# ¿Por dónde está el arquero? Se tira al otro lado.
+	var arquero = _arquero_rival()
+	var lado := -1.0
+	if arquero != null and arquero.position.y < 0.0:
+		lado = 1.0
+	var altura := lado * maxf(3.5, mitad_arco * 0.62)
+	# OJO con la distancia: el balón frena, así que un tiro de muy lejos llega
+	# muerto. Desde 22 m o menos llega con fuerza; más lejos, es un despeje.
+	if dist_arco < 22.0:
+		patear_hacia_punto(Vector2(arco_rival, altura), 23.0)
+	else:
+		patear_hacia_punto(Vector2(arco_rival, altura * 0.6), 18.0)
+
+
+## El arquero del equipo contrario (para tirar lejos de él).
+func _arquero_rival():
+	for f in todos:
+		if f != self and f.equipo != equipo and f.rol == Rol.ARQUERO:
+			return f
+	return null
+
+
+## Patea apuntando a un punto (por ejemplo, una esquina del arco).
+func patear_hacia_punto(punto: Vector2, fuerza: float, giro := 0.0) -> bool:
+	var d := punto - position
+	if d.length() < 0.01:
+		return false
+	hacia = d.normalized()
+	rotation = angulo_hacia(hacia)
+	return patear(fuerza, giro)
 
 
 ## El rival de campo más peligroso: el que está más cerca de mi arco.

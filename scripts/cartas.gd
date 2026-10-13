@@ -4,10 +4,14 @@ extends RefCounted
 ##
 ## Una carta es un diccionario con los datos del jugador ya listos para pintar:
 ##   nombre, puesto, dorsal, equipo, color1, color2,
-##   vel, tir, pas, reg, fis, res   (las 6 estadísticas, de 1 a 99)
+##   sus 6 estadísticas (de 1 a 99, ver Cartas.estadisticas)
 ##   ovr                  (el promedio, de 1 a 99)
 ##   nivel                ("bronce", "plata" u "oro")
 ##   especial             (true si es de las brillantes y raras)
+##
+## Las estadísticas NO son las mismas para todos: los jugadores de campo usan
+## vel, tir, pas, reg, fis y res, y los arqueros usan ref, man, ach, aer, pie
+## y saq (ver Clubes.ESTADISTICAS).
 ##
 ## El nivel lo decide el OVR, como en FIFA: bronce hasta 74, plata de 75 a 82
 ## y oro de 83 para arriba. El OVR se calcula con las estadísticas que importan
@@ -29,15 +33,32 @@ const PROBABILIDAD_ESPECIAL := 0.06
 ## piel brillante, así que no tendría sentido que saliera peor que una de plata.
 const OVR_MINIMO_ESPECIAL := 83
 
-## Las 6 estadísticas: la clave en la carta y cómo se muestra.
-const ESTADISTICAS := [
-	["vel", "VEL"],
-	["tir", "TIR"],
-	["pas", "PAS"],
-	["reg", "REG"],
-	["fis", "FIS"],
-	["res", "RES"],
-]
+## Cómo se muestra cada estadística en la carta. Las de arquero (ref, man, ach,
+## aer, pie, saq) solo las usan los porteros.
+const ETIQUETAS := {
+	"vel": "VEL", "tir": "TIR", "pas": "PAS", "reg": "REG", "fis": "FIS", "res": "RES",
+	"ref": "REF", "man": "MAN", "ach": "ACH", "aer": "AER", "pie": "PIE", "saq": "SAQ",
+}
+
+## Cómo se llama cada estadística DENTRO de una carta. En el archivo de clubes
+## algunas usan una sola letra (v, t, f, r) para que el archivo no quede enorme,
+## pero en la carta se llaman completo. OJO: si esto se desajusta, las cartas
+## muestran 0 (ya nos pasó).
+const CLAVES := {
+	"v": "vel", "t": "tir", "f": "fis", "r": "res", "pas": "pas", "reg": "reg",
+	"ref": "ref", "man": "man", "ach": "ach", "aer": "aer", "pie": "pie", "saq": "saq",
+}
+
+
+## Las 6 estadísticas de una carta ya listas para dibujar: [[clave, etiqueta], ...].
+## Las claves son las de la CARTA (vel, tir...), que es lo que hay que buscar en
+## el diccionario de la carta. Dependen del puesto.
+static func estadisticas(puesto: String) -> Array:
+	var lista: Array = []
+	for clave in Clubes.estadisticas(puesto):
+		var en_carta := str(CLAVES.get(clave, clave))
+		lista.append([en_carta, str(ETIQUETAS.get(en_carta, en_carta.to_upper()))])
+	return lista
 
 
 ## El nivel que le toca a un OVR.
@@ -59,7 +80,7 @@ static func piel(carta: Dictionary) -> String:
 ## Arma una carta a partir de un jugador y su club.
 static func crear(jugador: Dictionary, club: Dictionary, especial := false) -> Dictionary:
 	var ovr := Clubes.ovr(jugador)
-	return {
+	var carta := {
 		"nombre": str(jugador.get("n", "?")),
 		"puesto": str(jugador.get("p", "MC")),
 		"dorsal": int(jugador.get("d", 0)),
@@ -67,16 +88,15 @@ static func crear(jugador: Dictionary, club: Dictionary, especial := false) -> D
 		"equipo_id": str(club.get("id", "")),
 		"color1": str(club.get("color_principal", "#ffffff")),
 		"color2": str(club.get("color_secundario", "#111111")),
-		"vel": int(jugador.get("v", 50)),
-		"tir": int(jugador.get("t", 50)),
-		"pas": int(jugador.get("pas", 50)),
-		"reg": int(jugador.get("reg", 50)),
-		"fis": int(jugador.get("f", 50)),
-		"res": int(jugador.get("r", 50)),
 		"ovr": ovr,
 		"nivel": nivel(ovr),
 		"especial": especial,
 	}
+	# Las 6 estadísticas que le tocan a su puesto (el arquero tiene las suyas).
+	for par in estadisticas(str(jugador.get("p", "MC"))):
+		var clave: String = par[0]
+		carta[clave] = int(jugador.get(clave, 50))
+	return carta
 
 
 ## Las cartas ya armadas y separadas por nivel, para no estar recorriendo toda la

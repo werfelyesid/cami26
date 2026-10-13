@@ -4,6 +4,7 @@ extends Control
 const RUTA_PARTIDO := "res://scenes/partido.tscn"
 const RUTA_SOBRES := "res://scenes/sobres.tscn"
 const RUTA_PLANTILLA := "res://scenes/plantilla.tscn"
+const RUTA_CARRERA := "res://scenes/carrera.tscn"
 
 var boton_dificultad: Button
 var panel_ayuda: PanelContainer
@@ -65,6 +66,10 @@ func _crear_botones() -> void:
 	var jugar := _boton("JUGAR", 38, Vector2(360.0, 74.0))
 	jugar.pressed.connect(_jugar)
 	caja.add_child(jugar)
+
+	var carrera := _boton("CARRERA", 22, Vector2(360.0, 52.0))
+	carrera.pressed.connect(_ver_carrera)
+	caja.add_child(carrera)
 
 	boton_dificultad = _boton("", 22, Vector2(360.0, 52.0))
 	boton_dificultad.pressed.connect(_cambiar_dificultad)
@@ -243,7 +248,8 @@ func _input(evento: InputEvent) -> void:
 # ------------------------------------------------------------------ botones ---
 
 func _jugar() -> void:
-	get_tree().change_scene_to_file(RUTA_PARTIDO)
+	# Primero las alineaciones: tus jugadores y los del rival.
+	Alineaciones.mostrar(get_tree())
 
 
 func _ver_sobres() -> void:
@@ -252,6 +258,10 @@ func _ver_sobres() -> void:
 
 func _ver_plantilla() -> void:
 	get_tree().change_scene_to_file(RUTA_PLANTILLA)
+
+
+func _ver_carrera() -> void:
+	get_tree().change_scene_to_file(RUTA_CARRERA)
 
 
 func _cambiar_dificultad() -> void:

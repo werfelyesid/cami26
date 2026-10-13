@@ -13,6 +13,7 @@ extends Control
 
 const Tarjeta = preload("res://scripts/tarjeta.gd")
 const RUTA_MENU := "res://scenes/main_menu.tscn"
+const RUTA_CARRERA := "res://scenes/carrera.tscn"
 
 const TAMANO_TIENDA := Vector2(150.0, 197.0)
 const TAMANO_PREMIO := Vector2(236.0, 324.0)
@@ -111,7 +112,7 @@ func _construir() -> void:
 	_tienda.add_child(probabilidades)
 
 	var volver := _boton(_tienda, "VOLVER AL MENÚ", 20)
-	volver.pressed.connect(func(): get_tree().change_scene_to_file(RUTA_MENU))
+	volver.pressed.connect(_volver)
 
 	_premio = VBoxContainer.new()
 	_premio.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -215,6 +216,13 @@ func _volver_a_la_tienda() -> void:
 	_premio.visible = false
 	_tienda.visible = true
 	_refrescar()
+
+
+## Volver: a la carrera si el sobre se ganó en un partido de liga, y si no al menú.
+func _volver() -> void:
+	var a_la_carrera := Datos.volver_a == "carrera"
+	Datos.volver_a = ""
+	get_tree().change_scene_to_file(RUTA_CARRERA if a_la_carrera else RUTA_MENU)
 
 
 # ---------------------------------------------------------------- ayuditas ---

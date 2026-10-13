@@ -55,7 +55,7 @@ const ZONAS_PENAL := [-1, 0, 1]
 ##   - Si es muy grande, los tiros se van al palo.
 ##   - Si es muy chica, el arquero tapa dos zonas de una sola tirida.
 const ZONA_FRACCION := 0.55
-## El arco se agranda en los penales (10 m -> 18 m). Con el arco de siempre las
+## El arco se agranda en los penales (17 m -> 18 m). Con el arco del partido las
 ## tres zonas quedan tan juntas que el arquero taparía dos de una sola tirida.
 ## (Ojo: el balón mide 2 m y el arquero llega a 2,87 m, por eso hace falta un
 ## arco bien ancho para que cada zona sea solo suya.)
@@ -70,7 +70,7 @@ const SEGUNDOS_VUELO := 3.0
 # --- La cancha (igual que en cancha.gd) ---
 const MITAD_LARGO := 60.0
 const MITAD_ANCHO := 38.0
-const MITAD_PORTERIA := 5.0           # mitad del arco de 10 m
+const MITAD_PORTERIA := 5.0 * 1.7       # mitad del arco del partido (17 m)
 const PUNTO_PENAL := 11.0
 const AREA_PROFUNDIDAD := 16.5
 const AREA_MITAD_ANCHO := 20.0
@@ -155,6 +155,10 @@ var escenario = null
 var marcas = null
 var interfaz_penal = null
 
+## Si este partido es de la LIGA (del modo carrera): {"rival", "soy_local",
+## "fecha"}. Vacío = partido amistoso, como siempre.
+var liga: Dictionary = {}
+
 
 func _ready() -> void:
 	escenario = Escenario.new()
@@ -163,7 +167,23 @@ func _ready() -> void:
 	_crear_equipos()
 	_crear_camara()
 	_crear_interfaz()
+	_poner_nombres()
 	_saque_de_centro()
+
+
+## Si venimos de la carrera, el marcador muestra los clubes de verdad.
+func _poner_nombres() -> void:
+	liga = Datos.partido_de_liga.duplicate()
+	if liga.is_empty():
+		return
+	var mio := Clubes.buscar(str(Datos.carrera.get("club", "")))
+	var rival := Clubes.buscar(str(liga.get("rival", "")))
+	var mi_corto := str(mio.get("corto", "TÚ"))
+	var su_corto := str(rival.get("corto", "RIVAL"))
+	if bool(liga.get("soy_local", true)):
+		hud.poner_nombres(mi_corto, su_corto)
+	else:
+		hud.poner_nombres(su_corto, mi_corto)
 
 
 # ----------------------------------------------------------------- armado ---
@@ -216,6 +236,7 @@ func _crear_equipo(equipo: int) -> void:
 		f.area_propia = _area_de(equipo)
 		f.balon = balon
 		f.todos = futbolistas
+		f.mitad_arco = _mitad_porteria()
 		f.position = puesto
 		add_child(f)
 		futbolistas.append(f)
@@ -420,9 +441,9 @@ func _marcar_dueno_del_balon() -> void:
 		if f.rol == ARQUERO:
 			continue                      # los arqueros no regatean
 		if f == dueno_balon:
-			d -= 0.45                     # el que la tiene, la conserva
+			d -= 0.95                     # el que la tiene, la conserva (antes 0.45)
 		if f == controlado:
-			d -= 0.60                     # tu jugador tiene una buena ayudita
+			d -= 1.10                     # tu jugador tiene una buena ayudita
 		if d < mejor_distancia:
 			mejor_distancia = d
 			mejor = f
@@ -822,6 +843,11 @@ func _terminar_tiempo_normal() -> void:
 	tiempo = FIN_2T
 	_parar_todos()
 	if goles_local == goles_rival:
+		# En la liga el empate VALE (así lo pide una tabla de posiciones): no hay
+		# tiempo extra ni penales, el partido termina 1 punto para cada uno.
+		if not liga.is_empty():
+			_finalizar()
+			return
 		fase = Fase.EXTRA
 		hud.mostrar_mensaje("¡NOS VAMOS A TIEMPO EXTRA!", 3.0)
 		await get_tree().create_timer(3.0).timeout
@@ -859,11 +885,32 @@ func _finalizar() -> void:
 ## Termina el partido y lleva a donde toca.
 ## Si ganaste, primero te sale el sobre: 1 jugador + 200 gemas + 1.000 moneditas.
 func _ir_al_final(gano: bool) -> void:
+	if not liga.is_empty():
+		_cerrar_partido_de_liga(gano)
+		return
 	if gano:
 		_entregar_sobre_ganado()
 		get_tree().change_scene_to_file("res://scenes/sobres.tscn")
 	else:
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+
+
+## Cierra un partido de la LIGA: guarda el resultado en la carrera (y simula el
+## resto de la fecha) y vuelve a la pantalla de la carrera.
+## OJO: el marcador va con TU equipo primero, así que si jugaste de visita hay
+## que darle la vuelta al resultado.
+func _cerrar_partido_de_liga(gano: bool) -> void:
+	var soy_local := bool(liga.get("soy_local", true))
+	var de_local := goles_local if soy_local else goles_rival
+	var de_visita := goles_rival if soy_local else goles_local
+	Datos.carrera_cerrar_mi_partido(de_local, de_visita)
+	if gano:
+		_entregar_sobre_ganado()
+		# Ganar sigue dando sobre; después la pantalla de sobres vuelve a la carrera.
+		Datos.volver_a = "carrera"
+		get_tree().change_scene_to_file("res://scenes/sobres.tscn")
+	else:
+		get_tree().change_scene_to_file("res://scenes/carrera.tscn")
 
 
 ## Arma y guarda el sobre que se gana por ganar el partido.
@@ -920,6 +967,7 @@ func _preparar_penal() -> void:
 
 	for f in futbolistas:
 		f.reiniciar_para_penal()
+		f.mitad_arco = _mitad_porteria()
 		if f == penal_tirador or f == penal_arquero:
 			f.visible = true
 			f.set_physics_process(true)

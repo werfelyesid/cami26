@@ -14,6 +14,11 @@ var barra_texto: Label
 
 var _espera_mensaje := 0.0
 
+## Cómo se llaman los dos equipos en el marcador. En un partido de liga se
+## cambian por los nombres cortos de los clubes (HUD.poner_nombres).
+var nombre_tuyo := "TÚ"
+var nombre_rival := "RIVAL"
+
 
 func _ready() -> void:
 	# --- barra de arriba ---
@@ -98,9 +103,16 @@ func _process(delta: float) -> void:
 			mensaje.visible = false
 
 
+## Le pone nombre a los dos equipos (en un partido de liga: los del club).
+func poner_nombres(tuyo: String, rival: String) -> void:
+	nombre_tuyo = tuyo
+	nombre_rival = rival
+	marcador.text = "%s  0  -  0  %s" % [tuyo, rival]
+
+
 ## Actualiza los goles, el reloj y la franja de abajo.
 func actualizar(goles_tuyos: int, goles_rival: int, segundos: float, fase: String, extra := "") -> void:
-	marcador.text = "TÚ  %d  -  %d  RIVAL" % [goles_tuyos, goles_rival]
+	marcador.text = "%s  %d  -  %d  %s" % [nombre_tuyo, goles_tuyos, goles_rival, nombre_rival]
 	var minutos := int(segundos) / 60
 	var segs := int(segundos) % 60
 	reloj.text = "%d:%02d" % [minutos, segs]

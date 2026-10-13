@@ -76,11 +76,13 @@ func _armar() -> void:
 		size.y * 0.038, Color(_color_texto.r, _color_texto.g, _color_texto.b, 0.82),
 		HORIZONTAL_ALIGNMENT_CENTER)
 
-	# Las estadísticas, repartidas en el hueco de abajo (sirve para 4 o para 6).
-	var cuantas := Cartas.ESTADISTICAS.size()
+	# Las estadísticas, repartidas en el hueco de abajo (sirven para 4 o para 6,
+	# y el arquero tiene las suyas).
+	var pares := Cartas.estadisticas(str(datos.get("puesto", "")))
+	var cuantas := pares.size()
 	var arriba := 0.660
 	var paso := 0.330 / float(cuantas)
-	for par in Cartas.ESTADISTICAS:
+	for par in pares:
 		var clave: String = par[0]
 		_etiqueta(str(par[1]), 0.085, arriba, 0.26, paso,
 			size.y * minf(0.048, paso * 0.92), Color(_color_texto.r, _color_texto.g, _color_texto.b, 0.80),

@@ -511,6 +511,16 @@ func _avisar(texto: String) -> void:
 
 # ------------------------------------------------------------- guardar ---
 
+## La plantilla de TITULARES como lista de cartas, para mostrarla o usarla.
+## Si hay huecos libres, devuelve las cartas que tenga (pueden ser menos de 11).
+func cartas_titulares() -> Array:
+	var salida: Array = []
+	for indice in titulares:
+		var i := int(indice)
+		if i >= 0 and i < Datos.inventario.size():
+			salida.append(Datos.inventario[i])
+	return salida
+
 ## Lee la plantilla guardada y la deja lista (arreglando lo que esté raro).
 func _cargar() -> void:
 	var guardada: Dictionary = Datos.plantilla

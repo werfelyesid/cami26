@@ -10,7 +10,11 @@ extends CharacterBody2D
 
 ## Radio en metros (un balón de verdad mide 0,11 m... ¡este es de mentira!).
 const RADIO := 1.0
-const FRENADO := 1.1          # cuánto se va frenando por segundo
+## Cuánto se va frenando por segundo. Antes era 1,1 y el balón se frenaba tanto
+## que un tiro fuerte moría a los ~19 m: los tiros de lejos nunca llegaban al
+## arco (y por eso era tan difícil meter gol). Con 0,42 el balón recorre unos
+## 50 m y un tiro desde 25 m llega al arco a unos 12 m/s.
+const FRENADO := 0.42
 const REBOTE := 0.72          # con cuánta fuerza sale después de chocar
 const VELOCIDAD_MAXIMA := 24.0
 

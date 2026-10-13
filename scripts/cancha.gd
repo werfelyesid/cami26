@@ -3,9 +3,10 @@ extends Node2D
 ##
 ## Las medidas son casi las de una cancha de verdad:
 ##   100 m de largo x 64 m de ancho, área de 16,5 m, punto de penal a 11 m.
-##   El arco sí es más ancho que el real (10 m en vez de 7,32 m) porque el
-##   balón y los jugadores son grandes: si el arco fuera chiquito, el arquero
-##   taparía todo y no se podría meter ni un gol.
+##   El arco sí es más ancho que el real porque el balón y los jugadores son
+##   grandes: si el arco fuera chiquito, el arquero taparía todo y no se podría
+##   meter ni un gol. El de verdad mide 7,32 m; aquí se empezó con 10 m y ahora
+##   se agrandó 1,7 veces más (17 m), porque Camilo lo pidió así.
 ##
 ## Coordenadas del mundo:
 ##   x = a lo largo de la cancha (de -50 a +50, los arcos en los extremos)
@@ -17,9 +18,13 @@ const MITAD_LARGO := 60.0
 const ANCHO := 76.0
 const MITAD_ANCHO := 38.0
 
-## El arco de siempre, de 10 m. El de verdad mide 7,32 m: es más ancho a
-## propósito, porque el balón y los jugadores son grandes.
-const ANCHO_PORTERIA := 10.0
+## Cuánto se agranda el arco del partido. Se empezó con 10 m y el 1,7 lo pide
+## Camilo: 10 x 1,7 = 17 m. OJO: este número y ANCHO_PORTERIA (en cancha.gd)
+## tienen que ir siempre de la mano.
+const FACTOR_ARCO := 1.7
+## El arco de siempre. El de verdad mide 7,32 m: es más ancho a propósito,
+## porque el balón y los jugadores son grandes.
+const ANCHO_PORTERIA := 10.0 * FACTOR_ARCO
 ## El arco que se está usando AHORA. En los penales se agranda con poner_arco()
 ## para que el pateador tenga margen y el arquero solo pueda tapar una zona.
 var ancho_porteria := ANCHO_PORTERIA
@@ -139,7 +144,7 @@ func mitad_porteria() -> float:
 
 
 ## Cambia el ancho del arco y rearma los muros.
-## En los penales el partido lo agranda a 14 m: así las tres zonas de tiro
+## En los penales el partido lo agranda a 18 m: así las tres zonas de tiro
 ## quedan separadas y el arquero solo puede tapar la suya.
 func poner_arco(ancho: float) -> void:
 	if is_equal_approx(ancho, ancho_porteria):

@@ -10,6 +10,9 @@ extends Control
 ## la carta de la lista a un hueco. La pantalla (plantilla.gd) es la que decide
 ## si se puede soltar dónde quieres.
 
+## La carta pequeñita que se ve pegada al dedo mientras arrastras.
+const TAM_PREVIO := Vector2(78.0, 107.0)
+
 ## Los datos de la carta (vacío = hueco libre).
 var carta: Dictionary = {}
 ## Su posición en el inventario (-1 = libre).
@@ -104,9 +107,10 @@ func _dibujar_carta() -> void:
 ## Las 6 estadísticas, en un renglón de 6 columnas (solo en la lista).
 func _dibujar_estadisticas(color_texto: Color) -> void:
 	var fuente := ThemeDB.fallback_font
-	var ancho := size.x / float(Cartas.ESTADISTICAS.size())
+	var pares := Cartas.estadisticas(str(carta.get("puesto", "")))
+	var ancho := size.x / float(pares.size())
 	var i := 0
-	for par in Cartas.ESTADISTICAS:
+	for par in pares:
 		var clave: String = par[0]
 		var x := ancho * float(i)
 		var tam := int(size.y * 0.16)
@@ -128,8 +132,13 @@ func _get_drag_data(_pos: Vector2) -> Variant:
 	# Lo que se ve pegado al dedo mientras se arrastra.
 	var vista := TextureRect.new()
 	vista.texture = load(Cartas.piel(carta))
-	vista.custom_minimum_size = Vector2(78.0, 107.0)
-	vista.size = Vector2(78.0, 107.0)
+	# OJO: el previo NO va dentro de un contenedor, así que nadie le pone el
+	# tamaño. Sin estas dos líneas se dibuja del tamaño de la imagen (512x704)
+	# y tapa media pantalla mientras arrastras.
+	vista.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	vista.stretch_mode = TextureRect.STRETCH_SCALE
+	vista.custom_minimum_size = TAM_PREVIO
+	vista.size = TAM_PREVIO
 	vista.modulate = Color(1, 1, 1, 0.85)
 	set_drag_preview(vista)
 	return datos
