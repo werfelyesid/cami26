@@ -203,7 +203,28 @@ func _crear_equipos() -> void:
 		controlado.controlado = true
 
 
+## Los jugadores del club rival (los de verdad, del archivo de clubes).
+##
+## Con esto el rival de un partido amistoso es un club de verdad: sus dorsales y
+## el color de su camiseta. Antes el rival era siempre el mismo equipo rojo
+## genérico, así que todos los clubes nuevos (City, Liverpool, Inter...) no se
+## veían nunca en la cancha.
+func _jugadores_del_rival() -> Array:
+	var liga: Dictionary = Datos.partido_de_liga
+	if liga.is_empty():
+		return []
+	var club := Clubes.buscar(str(liga.get("rival", "")))
+	if club.is_empty():
+		return []
+	return club.get("plantilla", [])
+
+
 func _crear_equipo(equipo: int) -> void:
+	var del_rival := _jugadores_del_rival() if equipo == 1 else []
+	var club_rival := {}
+	if not _jugadores_del_rival().is_empty():
+		club_rival = Clubes.buscar(str(Datos.partido_de_liga.get("rival", "")))
+	var i := 0
 	for datos in FORMACION:
 		var f = Jugador.new()
 		f.equipo = equipo
@@ -224,7 +245,7 @@ func _crear_equipo(equipo: int) -> void:
 			if f.rol == ARQUERO:
 				f.color_camiseta = Color(0.95, 0.76, 0.12)
 		else:
-			# El rival: rojo.
+			# El rival: su color. Si es un club de verdad, el suyo; si no, rojo.
 			f.arco_propio = MITAD_LARGO
 			f.arco_rival = -MITAD_LARGO
 			f.color_camiseta = Color(0.86, 0.16, 0.16)
@@ -232,7 +253,17 @@ func _crear_equipo(equipo: int) -> void:
 			f.velocidad = Ajustes.velocidad_rival() if f.rol != ARQUERO else Ajustes.velocidad_arquero()
 			if f.rol == ARQUERO:
 				f.color_camiseta = Color(0.20, 0.72, 0.35)
+			# El dorsal y el color de la camiseta, del club de verdad.
+			if not club_rival.is_empty():
+				f.color_camiseta = Cartas.color_de(str(club_rival.get("color_principal", "#c81e1e")))
+				if not _jugadores_del_rival().is_empty():
+					var quien: Dictionary = del_rival[i % del_rival.size()]
+					f.numero = int(quien.get("d", f.numero))
+					if f.rol == ARQUERO:
+						f.color_camiseta = Cartas.color_de(
+							str(club_rival.get("color_secundario", "#202020")))
 
+		i += 1
 		f.area_propia = _area_de(equipo)
 		f.balon = balon
 		f.todos = futbolistas

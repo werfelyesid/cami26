@@ -310,10 +310,18 @@ func reclamar_sobre_diario() -> void:
 # --------------------------------------------------------------- carrera ---
 
 ## Los clubes que juegan la liga (todos, en el orden del archivo).
+## Los clubes que juegan la liga del modo carrera.
+##
+## OJO: NO son todos los clubes del archivo. En el archivo hay también clubes de
+## otras ligas (Premier, Serie A, Bundesliga, Ligue 1) para que los sobres tengan
+## mucha más variedad de jugadores. Si la carrera los metiera a todos, la liga
+## tendría 36 clubes y 35 fechas en vez de 21.
 func carrera_ids() -> Array:
 	var ids: Array = []
 	for club in Clubes.cargar_todos():
-		ids.append(str(club.get("id", "")))
+		var liga := str(club.get("liga", ""))
+		if liga == "LaLiga" or liga == "Especial":
+			ids.append(str(club.get("id", "")))
 	return ids
 
 

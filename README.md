@@ -196,11 +196,15 @@ cami26/
 ├── project.godot          Configuración: pantalla horizontal, motor liviano, autoloads
 ├── icon.svg               El ícono del juego
 ├── datos/
-│   ├── clubes.json        LaLiga: los 20 clubes con su plantilla, táctica y colores
+│   ├── clubes.json        37 clubes y 755 jugadores, con táctica y colores
 │   ├── cartas/            Las pieles de las cartas y el sobre (PNG), por código
 │   └── escudos/           Los escudos de los clubes (se llenan en otra fase)
 ├── herramientas/
-│   └── generar_cartas.py  Dibuja y guarda los PNG de las cartas y del sobre
+│   ├── generar_cartas.py        Dibuja y guarda los PNG de las cartas y el sobre
+│   ├── agregar_jugadores.py     Agrega clubes y jugadores a clubes.json (con su
+│   │                            nivel: velocidad, tiro, físico y resistencia)
+│   └── agregar_estadisticas.py  Calcula el pase, el regate y las 6 estadísticas
+│                                de los arqueros
 ├── scenes/
 │   ├── main_menu.tscn     Escena que arranca (el menú)
 │   ├── partido.tscn       Escena del partido (solo apunta al script)
@@ -480,10 +484,24 @@ godot --path . res://scenes/sobres.tscn -- --simular-premio
 ### Los clubes
 
 Están en `datos/clubes.json`, que es un archivo de texto que se puede editar a
-mano. Son **21 clubes**: los 20 de LaLiga y un club inventado, **Leyendas**, con
-16 cracks de la historia (Maradona, Pelé, Ronaldinho, Ronaldo Nazário, Zidane,
-Yashin…). Arda Güler va con el Real Madrid, que es su equipo de verdad. Las
-reglas son:
+mano. Son **37 clubes con 755 jugadores**:
+
+| Liga | Clubes |
+|---|---|
+| **LaLiga** | los 20 (Real Madrid, Barcelona, Atlético…) con sus plantillas largas |
+| **Premier League** | Manchester City, Liverpool, Arsenal, Chelsea, Manchester United, Tottenham |
+| **Serie A** | Inter, Milan, Juventus, Napoli |
+| **Bundesliga** | Bayern Múnich, Borussia Dortmund, Bayer Leverkusen |
+| **Ligue 1** | PSG, Marsella, Mónaco |
+| **Especial** | **Leyendas**, con 16 cracks de la historia (Maradona, Pelé, Ronaldinho…) |
+
+⚠️ **La liga del modo carrera juega solo con LaLiga + Leyendas (21 clubes).** Los
+clubes de las otras ligas están para que los **sobres** den muchísima más
+variedad de jugadores (y ahora también aparecen como rival en un partido normal).
+Si la carrera los metiera a todos, la liga tendría 35 fechas en vez de 21. Eso se
+controla en `Datos.carrera_ids()`.
+
+Las reglas del archivo son:
 
 - La plantilla va **en orden**: los **11 primeros son los titulares** y los que
   siguen forman el banquillo.
@@ -503,8 +521,34 @@ Para revisar el archivo sin abrir el editor, se puede llamar a
 `Clubes.validar()`: devuelve la lista de problemas (dorsales repetidos, nombres
 repetidos, estadísticas fuera de 1-119, un club sin arquero...).
 
+### Las herramientas de los datos
+
+| Quiero... | Comando |
+|---|---|
+| Agregar clubes o jugadores | `python3 herramientas/agregar_jugadores.py --revisar` (y sin `--revisar` para escribirlos) |
+| Calcular pase, regate y las estadísticas de los arqueros | `python3 herramientas/agregar_estadisticas.py` |
+
+`agregar_jugadores.py` pide muy poquito por jugador: **nombre, puesto, dorsal y
+nivel (1 a 5)**, donde 5 es una estrella mundial y 1 un canterano. De ahí saca la
+velocidad, el tiro, el físico y la resistencia, y la otra herramienta calcula el
+resto. Además el script es **listo**: se salta a los que ya estén (también si
+coincide el apellido, para no repetir a "Altimira" y "Sergi Altimira") y le da un
+dorsal libre al que lo tenga repetido.
+
 ⚠️ Las plantillas y los dorsales de verdad **cambian cada temporada**: los datos
 de aquí son un punto de partida editable, no una verdad absoluta.
+
+### El rival de un partido normal
+
+Al darle a JUGAR, el rival es **un club de verdad sacado al azar** del archivo
+(así te puede tocar el Liverpool, el Inter o el PSG): en las alineaciones sale su
+plantilla completa, y en la cancha sus jugadores llevan **sus dorsales y los
+colores de su camiseta**.
+
+Ojo: eso es el **uniforme** del rival. Su forma de jugar y sus estadísticas
+todavía no cambian (el rival juega con el equipo de siempre y la dificultad que
+elijas). Que cada jugador de la cancha tenga SUS estadísticas es lo que falta
+para más adelante.
 
 ---
 
@@ -620,6 +664,11 @@ no cabe entre el arquero y el palo y no se puede meter gol nunca.
     En headless el motor corre a otra velocidad, y al terminar el partido la
     escena cambia y libera el nodo: la prueba se queda colgada leyendo un nodo
     que ya no existe. Se para antes (`while is_instance_valid(p) and ...`).
+21. **En este entorno, escribir `"..." % [lista]` en Python falla.** Da
+    `TypeError: not enough arguments for format string` aunque la cuenta esté
+    bien; en cambio con **tupla** (`% (a, b, c)`) funciona. Es raro, pero pasa:
+    si una herramienta del proyecto se queja de eso, cambiar los corchetes por
+    paréntesis y listo.
 
 ---
 

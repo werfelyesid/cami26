@@ -248,7 +248,16 @@ func _input(evento: InputEvent) -> void:
 # ------------------------------------------------------------------ botones ---
 
 func _jugar() -> void:
-	# Primero las alineaciones: tus jugadores y los del rival.
+	# Un rival de verdad, de los clubes del archivo: así se juega contra el City,
+	# el Liverpool o el que sea. La pantalla de alineaciones lo muestra.
+	var clubes := Clubes.cargar_todos()
+	if not clubes.is_empty():
+		var elegido: Dictionary = clubes[randi() % clubes.size()]
+		Datos.partido_de_liga = {
+			"rival": str(elegido.get("id", "")),
+			"soy_local": true,
+			"fecha": 0,
+		}
 	Alineaciones.mostrar(get_tree())
 
 
