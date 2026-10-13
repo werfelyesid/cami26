@@ -14,6 +14,11 @@ var datos: Dictionary = {}
 
 var _color_club := Color.WHITE
 var _color_texto := Color.WHITE
+## true = la imagen de la piel no sirve y hay que dibujarla por código.
+var _piel_por_codigo := false
+## true = la imagen del avatar no sirve: se dibuja el círculo del club más oscuro
+## para que no parezca un hueco blanco (hay clubes de color blanco).
+var _sin_avatar := false
 
 
 ## Arma la carta con los datos de un jugador.
@@ -31,9 +36,13 @@ func configurar(carta: Dictionary, tamano := Vector2(240.0, 330.0)) -> void:
 func _draw() -> void:
 	if datos.is_empty():
 		return
+	if _piel_por_codigo:
+		Cartas.dibujar_piel(self, size, str(datos.get("nivel", "bronce")),
+			bool(datos.get("especial", false)))
 	var centro := Vector2(size.x * 0.5, size.y * 0.44)
 	var radio := size.x * 0.205
-	draw_circle(centro, radio, Color(_color_club.r, _color_club.g, _color_club.b, 0.95))
+	var color_circulo := _color_club.darkened(0.25) if _sin_avatar else _color_club
+	draw_circle(centro, radio, Color(color_circulo.r, color_circulo.g, color_circulo.b, 0.95))
 	draw_arc(centro, radio, 0.0, TAU, 48, Color(1, 1, 1, 0.35), maxf(1.0, size.x * 0.008))
 	# Una franja abajo con el segundo color del club, para que se reconozca.
 	var franja := size.y * 0.016
@@ -47,21 +56,32 @@ func _armar() -> void:
 	if datos.is_empty():
 		return
 
-	var fondo := TextureRect.new()
-	fondo.texture = load(Cartas.piel(datos))
-	fondo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	fondo.stretch_mode = TextureRect.STRETCH_SCALE
-	fondo.set_anchors_preset(Control.PRESET_FULL_RECT)
-	fondo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(fondo)
+	# La piel: la imagen PNG si está buena; si salió en blanco o no está, se
+	# dibuja por código (ver Cartas.dibujar_piel). Así ninguna carta sale blanca.
+	var textura := Cartas.textura_piel(datos)
+	if textura != null:
+		var fondo := TextureRect.new()
+		fondo.texture = textura
+		fondo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		fondo.stretch_mode = TextureRect.STRETCH_SCALE
+		fondo.set_anchors_preset(Control.PRESET_FULL_RECT)
+		fondo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(fondo)
+	else:
+		_piel_por_codigo = true
 
+	# El avatar también se revisa: si su imagen quedó en blanco se deja sin
+	# avatar (se ve el círculo del club) en vez de un cuadro blanco.
 	var avatar := TextureRect.new()
-	avatar.texture = load(Cartas.AVATAR)
-	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_colocar(avatar, 0.28, 0.235, 0.44, 0.280)
-	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(avatar)
+	avatar.texture = Cartas.textura_buena(Cartas.AVATAR)
+	if avatar.texture != null:
+		avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_colocar(avatar, 0.28, 0.235, 0.44, 0.280)
+		avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(avatar)
+	else:
+		_sin_avatar = true
 
 	# Arriba a la izquierda: el promedio (OVR) y debajo el puesto.
 	_etiqueta(str(int(datos.get("ovr", 0))), 0.055, 0.030, 0.30, 0.140,

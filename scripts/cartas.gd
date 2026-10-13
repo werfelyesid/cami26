@@ -61,6 +61,71 @@ static func estadisticas(puesto: String) -> Array:
 	return lista
 
 
+## Los colores de cada nivel de carta: arriba, abajo y el borde. Son los mismos
+## que usa la herramienta herramientas/generar_cartas.py.
+const COLORES_PIEL := {
+	"bronce": [Color8(150, 104, 62), Color8(86, 52, 22), Color8(216, 168, 114)],
+	"plata": [Color8(198, 205, 213), Color8(117, 125, 134), Color8(240, 245, 250)],
+	"oro": [Color8(248, 208, 84), Color8(172, 118, 20), Color8(255, 238, 168)],
+	"especial": [Color8(84, 48, 176), Color8(16, 8, 48), Color8(255, 208, 92)],
+}
+
+
+## Dibuja la piel de una carta POR CÓDIGO: un degradado del color del nivel y su
+## borde. Se usa como red de seguridad, porque las imágenes PNG de las pieles se
+## pueden quedar en blanco (les pasó: las cartas salían blancas) y una carta
+## blanca no se entiende. Cualquier nodo que sepa dibujar puede usarla.
+static func dibujar_piel(quien: CanvasItem, tam: Vector2, nivel: String, especial: bool) -> void:
+	var clave := "especial" if especial else nivel
+	var colores: Array = COLORES_PIEL.get(clave, COLORES_PIEL["bronce"])
+	var arriba: Color = colores[0]
+	var abajo: Color = colores[1]
+	var borde: Color = colores[2]
+
+	# El degradado, con franjas finitas (así se hace un degradado con rectángulos).
+	var franjas := 10
+	var alto := tam.y / float(franjas)
+	for i in franjas:
+		var t := float(i) / float(franjas - 1)
+		quien.draw_rect(Rect2(0.0, alto * float(i), tam.x, alto + 1.0), arriba.lerp(abajo, t))
+
+	# El borde y una línea clara por dentro, para que se vea con volumen.
+	var grosor := maxf(2.0, tam.y * 0.022)
+	quien.draw_rect(Rect2(0.0, 0.0, tam.x, tam.y), borde, false, grosor)
+	var dentro := grosor + maxf(1.0, tam.y * 0.018)
+	if tam.x > dentro * 2.0 and tam.y > dentro * 2.0:
+		quien.draw_rect(Rect2(dentro, dentro, tam.x - dentro * 2.0, tam.y - dentro * 2.0),
+			Color(1, 1, 1, 0.22), false, maxf(1.0, tam.y * 0.008))
+	if clave == "especial":
+		quien.draw_rect(Rect2(dentro, dentro, tam.x - dentro * 2.0, tam.y - dentro * 2.0),
+			Color(1, 0.85, 0.35, 0.30), false, maxf(1.0, tam.y * 0.012))
+
+
+## La textura de la piel de una carta, PERO solo si sirve. Si no existe o salió
+## en blanco (la imagen se puede dañar al regenerarla), devuelve null para que
+## quien dibuje use `dibujar_piel()` en su lugar.
+static func textura_piel(carta: Dictionary) -> Texture2D:
+	return textura_buena(piel(carta))
+
+
+## Una imagen cualquiera (una piel, el avatar), PERO solo si sirve: si no existe
+## o si quedó en blanco devuelve null. Todas las imágenes de las cartas se miran
+## con esto, para que ninguna pueda salir como un cuadro blanco.
+static func textura_buena(ruta: String) -> Texture2D:
+	var tex: Texture2D = load(ruta)
+	if tex == null:
+		return null
+	var imagen := tex.get_image()
+	if imagen == null or imagen.get_width() < 8:
+		return null
+	# El centro sirve de termómetro: si la imagen quedó en blanco, el centro
+	# también está blanco (las pieles de las cartas y el avatar son oscuros ahí).
+	var píxel := imagen.get_pixel(imagen.get_width() / 2, imagen.get_height() / 2)
+	if píxel.r > 0.94 and píxel.g > 0.94 and píxel.b > 0.94:
+		return null                      # salió en blanco
+	return tex
+
+
 ## El nivel que le toca a un OVR.
 static func nivel(ovr: int) -> String:
 	if ovr >= OVR_ORO:

@@ -66,10 +66,16 @@ func _dibujar_vacio() -> void:
 
 
 func _dibujar_carta() -> void:
-	# La piel (bronce, plata, oro o especial) de fondo.
-	var piel: Texture2D = load(Cartas.piel(carta))
-	if piel != null:
-		draw_texture_rect(piel, Rect2(Vector2.ZERO, size), false)
+	# La piel (bronce, plata, oro o especial), DIBUJADA POR CÓDIGO.
+	#
+	# OJO (esto fue un dolor de cabeza): antes se dibujaba la imagen PNG de la
+	# piel con draw_texture_rect. Un día las cartas empezaron a salir BLANCAS
+	# (la textura importada quedó en blanco, seguramente porque los PNG se
+	# regeneraron con el editor abierto). Como estas cartas son chiquitas, se
+	# dibujan con código y así NO dependen de ninguna importación: nunca pueden
+	# salir en blanco.
+	Cartas.dibujar_piel(self, size,
+		str(carta.get("nivel", "bronce")), bool(carta.get("especial", false)))
 
 	var nivel := str(carta.get("nivel", ""))
 	var claro: bool = nivel == "oro" or nivel == "plata"

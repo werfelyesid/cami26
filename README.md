@@ -356,6 +356,27 @@ Si quieres cambiar los colores, se tocan en `ESTILOS` (arriba del todo del scrip
 y se vuelven a generar. Godot solo escribe encima los datos: el OVR, el puesto, el
 nombre, el club y las 6 estadísticas.
 
+#### ⚠️ Una carta NO puede salir blanca (pasó)
+
+Un día **las cartas salieron blancas** (unas sí, otras no): se veía el borde de la
+carta, pero el fondo quedaba blanco como una hoja. No era culpa de los datos ni de
+los colores: la **imagen PNG de la piel** que Godot tenía importada estaba en
+blanco (el PNG en el disco estaba bien y el mismo dibujo en un nodo de prueba
+salía bien; la textura importada, no). Pasa cuando se **regeneran las imágenes
+mientras el editor está abierto**.
+
+Como una carta blanca no se entiende, ahora hay **dos redes de seguridad** en
+`scripts/cartas.gd` (y por eso ninguna carta puede volver a salir blanca):
+
+| Red | Quién la usa |
+|---|---|
+| `Cartas.dibujar_piel()` — dibuja la piel **por código** (degradado del color del nivel, borde y brillo) | Las **mini cartas** de MI PLANTILLA y de la cancha la usan **siempre**, sin mirar ningún PNG |
+| `Cartas.textura_piel()` — entrega el PNG **solo si sirve**: si no existe o si el píxel del centro salió casi blanco, devuelve `null` | La **carta grande** (`scripts/tarjeta.gd`): si le dan `null`, ella sola dibuja la piel por código |
+
+Los colores de `dibujar_piel()` están en `COLORES_PIEL` y son **los mismos** que
+`ESTILOS` de `herramientas/generar_cartas.py`, así que una carta dibujada por
+código y la misma con PNG se ven casi iguales.
+
 ### El pase, el regate y las estadísticas del arquero (¡son inventados!)
 
 Ninguna estadística sale de una base de datos real (¡son todas inventadas!), pero
@@ -695,6 +716,7 @@ no cabe entre el arquero y el palo y no se puede meter gol nunca.
 | 3,5 | Los arqueros con SUS estadísticas (reflejos, manos, achique…) y el club Leyendas |
 | 4 | **EL MODO CARRERA**: la liga, la tabla de posiciones y los premios |
 | 4,5 | Las alineaciones antes de jugar, el arco más grande (17 m), el arquero en su línea, los bots que tiran y el balón que no se resbala |
+| 4,6 | 755 jugadores de 37 clubes (Premier, Serie A, Bundesliga, Ligue 1 y LaLiga) y **ninguna carta puede salir blanca**: las mini cartas se dibujan por código y la grande revisa su imagen |
 
 Lo que viene (si Camilo quiere): el mercado para comprar y vender cartas, subirle
 estadísticas a una carta con moneditas, y los escudos de los clubes.
