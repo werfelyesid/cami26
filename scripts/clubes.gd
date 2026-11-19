@@ -24,7 +24,7 @@ const JUGADORES_TITULARES := 11
 
 ## El tope de una estadística. El FIFA usa 99, pero aquí las cartas del equipo
 ## pueden llegar más arriba (119 es el tope), porque Camilo las quiere así.
-const MAX_ESTADISTICA := 119
+const MAX_ESTADISTICA := 130
 
 ## Los puestos que se usan y a qué rol del partido corresponde cada uno.
 ## Los números son los mismos del enum Rol de futbolista.gd:

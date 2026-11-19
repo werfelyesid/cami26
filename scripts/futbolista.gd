@@ -28,6 +28,19 @@ var numero := 9
 var rol := Rol.MEDIO
 var equipo := 0                      # 0 = tu equipo, 1 = el rival
 var controlado := false
+var nombre := ""                     # solo los cracks tienen nombre
+var crack := false
+
+# --- Estadísticas: de 1 a 130. La media es el promedio. ---
+var velocidad_stat := 70
+var tiro_stat := 70
+var pase_stat := 70
+var defensa_stat := 70
+var regate_stat := 70
+var atajada_stat := 20
+var media := 70
+## Multiplicador de velocidad (lo usa la dificultad en el rival).
+var mult_velocidad := 1.0
 var color_camiseta := Color(0.15, 0.35, 0.9)
 var color_numero := Color(1, 1, 1)
 var color_piel := Color(0.85, 0.64, 0.47)
@@ -108,7 +121,100 @@ func _ready() -> void:
 	choque.shape = forma
 	add_child(choque)
 	_alcance_atajada = RADIO + MANITA + Balon.RADIO
+	# La velocidad sale de la estadística: 130 = rapidísimo, 1 = lentísimo.
+	velocidad = lerpf(4.6, 11.0, _t(velocidad_stat))
+	_alcance_atajada = (RADIO + MANITA + Balon.RADIO) * lerpf(0.85, 1.30, _t(atajada_stat))
 	queue_redraw()
+
+
+## Convierte una estadística (1 a 130) en un valor de 0 a 1.
+func _t(stat: int) -> float:
+	return clampf((float(stat) - 1.0) / 129.0, 0.0, 1.0)
+
+
+## Carga las estadísticas de un jugador del archivo de clubes (datos/clubes.json).
+## Campos: v velocidad, t tiro, f físico, pas pase, reg regate.
+## Arqueros: ref reflejos, man manos, ach achique.
+func poner_stats_de(jugador: Dictionary) -> void:
+	velocidad_stat = int(jugador.get("v", 70))
+	tiro_stat = int(jugador.get("t", 70))
+	defensa_stat = int(jugador.get("f", 70))
+	pase_stat = int(jugador.get("pas", 70))
+	regate_stat = int(jugador.get("reg", 70))
+	var reflejos := float(jugador.get("ref", 20))
+	var manos := float(jugador.get("man", 20))
+	var achique := float(jugador.get("ach", 20))
+	atajada_stat = int(roundf((reflejos + manos + achique) / 3.0))
+	media = Clubes.ovr(jugador)
+	_limpiar_stats()
+
+
+## Estadísticas inventadas según el puesto, a partir de una media (1 a 130).
+## Sirve para los equipos que no vienen del archivo de clubes.
+func poner_stats(media_base: int) -> void:
+	var m := clampi(media_base, 1, 130)
+	match rol:
+		Rol.ARQUERO:
+			atajada_stat = m + 20
+			defensa_stat = m + 5
+			velocidad_stat = m - 10
+			tiro_stat = m - 30
+			pase_stat = m
+			regate_stat = m - 20
+		Rol.DEFENSA:
+			defensa_stat = m + 8
+			velocidad_stat = m - 3
+			pase_stat = m - 5
+			tiro_stat = m - 15
+			regate_stat = m - 10
+			atajada_stat = 15
+		Rol.MEDIO:
+			pase_stat = m + 8
+			regate_stat = m + 3
+			velocidad_stat = m
+			defensa_stat = m - 5
+			tiro_stat = m - 5
+			atajada_stat = 15
+		_:
+			tiro_stat = m + 10
+			regate_stat = m + 6
+			velocidad_stat = m + 4
+			pase_stat = m - 3
+			defensa_stat = m - 25
+			atajada_stat = 15
+	_limpiar_stats()
+	# La media se calcula con las estadísticas de verdad (así nunca miente).
+	if rol == Rol.ARQUERO:
+		media = int(roundf((velocidad_stat + tiro_stat + pase_stat + defensa_stat + regate_stat + atajada_stat) / 6.0))
+	else:
+		media = int(roundf((velocidad_stat + tiro_stat + pase_stat + defensa_stat + regate_stat) / 5.0))
+
+
+## Un crack (Cristiano, Messi): TODO en 130, la media máxima.
+func poner_stats_de_crack(nombre_crack: String, numero_crack: int) -> void:
+	velocidad_stat = 130
+	tiro_stat = 130
+	pase_stat = 130
+	defensa_stat = 130
+	regate_stat = 130
+	atajada_stat = 130
+	media = 130
+	nombre = nombre_crack
+	numero = numero_crack
+	crack = true
+	_limpiar_stats()
+
+
+## Que ninguna estadística se salga de 1-130 y recalcula la velocidad de juego.
+func _limpiar_stats() -> void:
+	velocidad_stat = clampi(velocidad_stat, 1, 130)
+	tiro_stat = clampi(tiro_stat, 1, 130)
+	pase_stat = clampi(pase_stat, 1, 130)
+	defensa_stat = clampi(defensa_stat, 1, 130)
+	regate_stat = clampi(regate_stat, 1, 130)
+	atajada_stat = clampi(atajada_stat, 1, 130)
+	media = clampi(media, 1, 130)
+	velocidad = lerpf(4.6, 11.0, _t(velocidad_stat))
 
 
 func _physics_process(delta: float) -> void:
@@ -144,7 +250,7 @@ func _mover(delta: float) -> void:
 	if quieto:
 		direccion = Vector2.ZERO
 		velocity = Vector2.ZERO
-	velocity = velocity.move_toward(direccion.normalized() * velocidad * factor_velocidad, aceleracion * delta)
+	velocity = velocity.move_toward(direccion.normalized() * velocidad * factor_velocidad * mult_velocidad, aceleracion * delta)
 	move_and_slide()
 
 	var signo := signf(arco_rival - arco_propio)
@@ -198,7 +304,7 @@ func _bloquear_balon() -> void:
 		return
 	var d: Vector2 = balon.position - position
 	var distancia := d.length()
-	if distancia > RADIO + Balon.RADIO or distancia < 0.01:
+	if distancia > (RADIO + Balon.RADIO) * lerpf(0.85, 1.35, _t(defensa_stat)) or distancia < 0.01:
 		return
 	var normal := d / distancia
 	var v: Vector2 = balon.velocidad
@@ -372,7 +478,7 @@ func _leer_entrada(delta: float) -> void:
 		var lado := v
 		if lado.length() < 0.3:
 			lado = hacia
-		velocity = lado.normalized() * 22.0
+		velocity = lado.normalized() * lerpf(15.0, 27.0, _t(atajada_stat))
 
 	# El arquero ataja con TIRO (un toquecito).
 	_quiere_agarrar = tirar
@@ -421,8 +527,9 @@ func _leer_entrada(delta: float) -> void:
 ## afuera (como cuando le pegas demasiado fuerte y se va arriba del arco).
 func disparar_con_potencia(p: float) -> bool:
 	var t := clampf((p - 1.0) / 9.0, 0.0, 1.0)
-	var fuerza := lerpf(13.0, 32.0, t)
-	var desvio := randf_range(-1.0, 1.0) * deg_to_rad(lerpf(1.0, 20.0, t))
+	var calidad := _t(tiro_stat)
+	var fuerza := lerpf(13.0, 32.0, t) * lerpf(0.75, 1.45, calidad)
+	var desvio := randf_range(-1.0, 1.0) * deg_to_rad(lerpf(1.0, 15.0, t) * lerpf(1.9, 0.30, calidad))
 	var rumbo := hacia.rotated(desvio)
 	rotation = angulo_hacia(rumbo)
 	hacia = rumbo
@@ -611,7 +718,9 @@ func _pasar_a_un_companero() -> bool:
 	var d: Vector2 = companero.position - position
 	if d.length() < 1.0:
 		return false
-	hacia = d.normalized()
+	# Un jugador con buen pase casi no se equivoca; uno malo se equivoca más.
+	var desvio := randf_range(-1.0, 1.0) * deg_to_rad(lerpf(14.0, 0.8, _t(pase_stat)))
+	hacia = d.normalized().rotated(desvio)
 	rotation = angulo_hacia(hacia)
 	return patear(clampf(d.length() * 0.85, 11.0, 22.0), 0.0)
 
@@ -806,7 +915,16 @@ func _draw() -> void:
 	# El número, siempre derecho aunque el jugador gire.
 	draw_set_transform(Vector2.ZERO, -rotation, Vector2.ONE)
 	var fuente := ThemeDB.fallback_font
-	var tam := int(RADIO * 1.00)
+	var tam := maxi(2, int(roundf(RADIO * 1.2)))
 	draw_string(fuente, Vector2(-RADIO, float(tam) * 0.35), str(numero),
 		HORIZONTAL_ALIGNMENT_CENTER, RADIO * 2.0, tam, color_numero)
+
+	# Los cracks (Cristiano y Messi) muestran su nombre abajo.
+	if crack and nombre != "":
+		var tam_nombre := maxi(2, int(roundf(RADIO * 0.75)))
+		var ancho := RADIO * 10.0
+		draw_string_outline(fuente, Vector2(-ancho * 0.5, RADIO * 2.3), nombre,
+			HORIZONTAL_ALIGNMENT_CENTER, ancho, tam_nombre, 2, Color(0, 0, 0, 0.9))
+		draw_string(fuente, Vector2(-ancho * 0.5, RADIO * 2.3), nombre,
+			HORIZONTAL_ALIGNMENT_CENTER, ancho, tam_nombre, Color(1, 1, 0.4))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

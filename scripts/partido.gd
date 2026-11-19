@@ -113,6 +113,8 @@ var controles = null
 var menu_pausa: CanvasLayer
 var controlado = null                 # el jugador que manejas ahora
 var dueno_balon = null                # quién tiene el balón
+## Cristiano: el crack de tu equipo. Arranca con el balón en el saque inicial.
+var cristiano = null
 
 var goles_local := 0
 var goles_rival := 0
@@ -127,6 +129,8 @@ var _espera_cambio := 0.0
 var _proteccion_id := 0                # para saber si ya pasó el ratito de protección
 var _en_saque := false                 # hay un saque en curso (el balón está "fuera de juego")
 var _espera_falta := 0.0               # para no cobrar mil faltas seguidas
+## El panel de números de camiseta (mientras se edita).
+var editor_numeros: Control = null
 
 # --- Penales ---
 var penales_mios := 0
@@ -197,8 +201,11 @@ func _crear_balon() -> void:
 func _crear_equipos() -> void:
 	_crear_equipo(0)
 	_crear_equipo(1)
-	# Empezamos manejando al delantero número 9.
-	controlado = _buscar(0, DELANTERO)
+	# Empezamos manejando a CRISTIANO (el crack de tu equipo).
+	if cristiano != null:
+		controlado = cristiano
+	else:
+		controlado = _buscar(0, DELANTERO)
 	if controlado != null:
 		controlado.controlado = true
 
@@ -262,6 +269,32 @@ func _crear_equipo(equipo: int) -> void:
 					if f.rol == ARQUERO:
 						f.color_camiseta = Cartas.color_de(
 							str(club_rival.get("color_secundario", "#202020")))
+
+		# --- Estadísticas: cada uno juega según su media (de 1 a 130) ---
+		if equipo == 0:
+			# Tu equipo: jugadores buenos, con algo de variedad.
+			f.poner_stats(104 + (i % 5) * 3)
+		else:
+			var quien_rival: Dictionary = {}
+			if not del_rival.is_empty():
+				quien_rival = del_rival[i % del_rival.size()]
+			if not quien_rival.is_empty():
+				f.poner_stats_de(quien_rival)
+			else:
+				f.poner_stats(96)
+			# La dificultad también ajusta la velocidad del rival.
+			f.mult_velocidad = Ajustes.velocidad_rival() / 6.4
+
+		# --- CRISTIANO y MESSI: los dos cracks, con 130 de media ---
+		if equipo == 0 and i == 14:
+			f.poner_stats_de_crack("CRISTIANO", 7)
+			cristiano = f
+		elif equipo == 1 and i == 11:
+			f.poner_stats_de_crack("MESSI", 10)
+
+		# --- Tu equipo usa los números de camiseta que hayas elegido ---
+		if equipo == 0 and i < Ajustes.numeros_mios.size():
+			f.numero = int(Ajustes.numeros_mios[i])
 
 		i += 1
 		f.area_propia = _area_de(equipo)
@@ -379,6 +412,13 @@ func _crear_menu_pausa() -> void:
 	seguir.pressed.connect(_reanudar)
 	caja.add_child(seguir)
 
+	var numeros := Button.new()
+	numeros.text = "NÚMEROS DE CAMISETA"
+	numeros.custom_minimum_size = Vector2(300.0, 68.0)
+	numeros.add_theme_font_size_override("font_size", 24)
+	numeros.pressed.connect(_abrir_numeros)
+	caja.add_child(numeros)
+
 	var salir := Button.new()
 	salir.text = "SALIR AL MENÚ"
 	salir.custom_minimum_size = Vector2(300.0, 68.0)
@@ -387,6 +427,157 @@ func _crear_menu_pausa() -> void:
 	caja.add_child(salir)
 
 	menu_pausa.visible = false
+
+
+# ------------------------------------------------ números de la camiseta ---
+
+func _abrir_numeros() -> void:
+	if editor_numeros != null:
+		return
+	editor_numeros = Control.new()
+	editor_numeros.set_anchors_preset(Control.PRESET_FULL_RECT)
+	editor_numeros.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	menu_pausa.add_child(editor_numeros)
+	_rellenar_numeros()
+
+
+func _cerrar_numeros() -> void:
+	_guardar_numeros()
+	if editor_numeros != null:
+		editor_numeros.queue_free()
+		editor_numeros = null
+
+
+func _rellenar_numeros() -> void:
+	if editor_numeros == null:
+		return
+	for hijo in editor_numeros.get_children():
+		hijo.queue_free()
+
+	var fondo := ColorRect.new()
+	fondo.color = Color(0.04, 0.06, 0.10, 0.98)
+	fondo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	editor_numeros.add_child(fondo)
+
+	var titulo := Label.new()
+	titulo.text = "NÚMEROS DE LA CAMISETA"
+	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	titulo.add_theme_font_size_override("font_size", 34)
+	titulo.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	titulo.offset_top = 22.0
+	titulo.offset_bottom = 66.0
+	editor_numeros.add_child(titulo)
+
+	var ayuda := Label.new()
+	ayuda.text = "Con - y + cambias el número. Si ya lo tiene otro, se los intercambia."
+	ayuda.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ayuda.add_theme_font_size_override("font_size", 17)
+	ayuda.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	ayuda.offset_top = 64.0
+	ayuda.offset_bottom = 92.0
+	editor_numeros.add_child(ayuda)
+
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 60.0
+	scroll.offset_right = -60.0
+	scroll.offset_top = 104.0
+	scroll.offset_bottom = -106.0
+	editor_numeros.add_child(scroll)
+
+	var lista := VBoxContainer.new()
+	lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lista.add_theme_constant_override("separation", 8)
+	scroll.add_child(lista)
+
+	for f in futbolistas:
+		if f.equipo == 0:
+			lista.add_child(_fila_numero(f))
+
+	var volver := Button.new()
+	volver.text = "VOLVER AL PARTIDO"
+	volver.add_theme_font_size_override("font_size", 26)
+	volver.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	volver.offset_left = 60.0
+	volver.offset_right = -60.0
+	volver.offset_top = -88.0
+	volver.offset_bottom = -20.0
+	volver.pressed.connect(_cerrar_numeros)
+	editor_numeros.add_child(volver)
+
+
+func _fila_numero(f) -> Control:
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 10)
+
+	var info := Label.new()
+	info.custom_minimum_size = Vector2(660.0, 44.0)
+	info.add_theme_font_size_override("font_size", 20)
+	var quien := str(f.nombre)
+	if quien == "":
+		quien = "JUGADOR %d" % int(f.numero)
+	info.text = "%s   ·   %s   ·   MEDIA %d" % [quien, _nombre_rol(int(f.rol)), int(f.media)]
+	fila.add_child(info)
+
+	var menos := Button.new()
+	menos.text = "-"
+	menos.custom_minimum_size = Vector2(56.0, 44.0)
+	menos.add_theme_font_size_override("font_size", 26)
+	menos.pressed.connect(_cambiar_numero.bind(f, -1))
+	fila.add_child(menos)
+
+	var num := Label.new()
+	num.text = str(int(f.numero))
+	num.custom_minimum_size = Vector2(70.0, 44.0)
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	num.add_theme_font_size_override("font_size", 26)
+	fila.add_child(num)
+
+	var mas := Button.new()
+	mas.text = "+"
+	mas.custom_minimum_size = Vector2(56.0, 44.0)
+	mas.add_theme_font_size_override("font_size", 26)
+	mas.pressed.connect(_cambiar_numero.bind(f, 1))
+	fila.add_child(mas)
+
+	return fila
+
+
+func _cambiar_numero(f, delta: int) -> void:
+	var actual := int(f.numero)
+	var nuevo := clampi(actual + delta, 1, 99)
+	if nuevo == actual:
+		return
+	# Si un compañero ya tiene ese número, se los intercambiamos.
+	for otro in futbolistas:
+		if otro != f and int(otro.equipo) == int(f.equipo) and int(otro.numero) == nuevo:
+			otro.numero = actual
+			break
+	f.numero = nuevo
+	_guardar_numeros()
+	call_deferred("_rellenar_numeros")
+
+
+func _guardar_numeros() -> void:
+	var mios: Array = []
+	for f in futbolistas:
+		if f.equipo == 0:
+			mios.append(int(f.numero))
+	if mios.size() == 16:
+		Ajustes.numeros_mios = mios
+		Ajustes.guardar_numeros()
+
+
+func _nombre_rol(rol: int) -> String:
+	match rol:
+		ARQUERO:
+			return "arquero"
+		DEFENSA:
+			return "defensa"
+		MEDIO:
+			return "medio"
+		_:
+			return "delantero"
 
 
 # ------------------------------------------------------------- cada cuadro ---
@@ -761,11 +952,9 @@ func _cambiar_jugador() -> void:
 		return
 	if controlado != null:
 		controlado.controlado = false
-		controlado.velocidad = VELOCIDAD_COMPANERO
 	controlado = mejor
 	controlado.controlado = true
 	controlado.controles = controles
-	controlado.velocidad = VELOCIDAD_MIA
 
 
 # ---------------------------------------------------------------- jugadas ---
@@ -815,9 +1004,11 @@ func _saque_de_centro() -> void:
 		f.direccion = Vector2.ZERO
 		f.controlado = false
 		f.puede_tocar = false
+	# Cristiano saca del centro: arranca pegado al balón.
+	if cristiano != null:
+		cristiano.position = Vector2(-2.5, 0.0)
 	if controlado != null:
 		controlado.controlado = true
-		controlado.velocidad = VELOCIDAD_MIA
 	# Un toque pendiente no puede tirar por su cuenta.
 	controles.disparo_toque = false
 	controles.pase_toque = false
@@ -852,7 +1043,12 @@ func _texto_extra() -> String:
 		return "vuelve en %d s" % int(ceilf(cuenta_descanso))
 	if fase == Fase.PENALES:
 		return "ronda %d de %d  ·  %d - %d" % [ronda_penal + 1, RONDAS_PENALES, penales_mios, penales_rival]
-	return "pulsa CAMBIAR (o Q) para elegir otro jugador"
+	if controlado != null:
+		var quien := str(controlado.nombre)
+		if quien == "":
+			quien = "JUGADOR %d" % int(controlado.numero)
+		return "MANEJAS: %s  ·  MEDIA %d  ·  CAMBIAR (Q) para otro" % [quien, int(controlado.media)]
+	return ""
 
 
 func _a_descanso() -> void:
