@@ -886,6 +886,10 @@ func _draw() -> void:
 	# Sombra.
 	draw_circle(Vector2(0.10, 0.18), RADIO, Color(0.0, 0.0, 0.0, 0.22))
 
+	# Las leyendas llevan un aro dorado.
+	if crack:
+		draw_arc(Vector2.ZERO, RADIO + 0.24, 0.0, TAU, 40, Color(1.0, 0.84, 0.2), 0.18)
+
 	# Si me están controlando, un aro amarillo para no perderme.
 	if controlado:
 		draw_circle(Vector2.ZERO, RADIO + 0.30, Color(1.0, 0.90, 0.10, 0.30))

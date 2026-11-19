@@ -12,8 +12,12 @@ const VELOCIDAD_RIVAL := [5.2, 6.4, 7.6]
 const VELOCIDAD_ARQUERO := [4.6, 5.4, 6.4]
 
 # --- Números de las camisetas ---
-# Van en el mismo orden que la formación de partido.gd.
-const NUMEROS_POR_DEFECTO := [1, 2, 3, 4, 5, 6, 8, 15, 16, 12, 14, 10, 11, 17, 7, 13]
+# Van en el mismo orden que la formación de partido.gd. Las leyendas van en los
+# tres puestos de ataque: Neymar 11, Messi 10 y Cristiano 7.
+const NUMEROS_POR_DEFECTO := [1, 2, 3, 4, 5, 6, 8, 15, 16, 12, 14, 17, 11, 10, 7, 13]
+## Si cambian los números de por defecto, se sube esta versión y se reinician
+## los que ya estaban guardados (si no, quedarían los viejos para siempre).
+const VERSION_NUMEROS := 2
 const RUTA_NUMEROS := "user://numeros.cfg"
 
 ## Los 16 números de tu equipo y los 16 del rival.
@@ -32,6 +36,10 @@ func cargar_numeros() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(RUTA_NUMEROS) != OK:
 		return
+	# ¿Los números guardados son de una versión vieja? Entonces se usan los
+	# nuevos (si no, las leyendas quedarían con números de antes).
+	if int(cfg.get_value("numeros", "version", 1)) < VERSION_NUMEROS:
+		return
 	var mios = cfg.get_value("numeros", "mios", numeros_mios)
 	var rival = cfg.get_value("numeros", "rival", numeros_rival)
 	if mios is Array and mios.size() == NUMEROS_POR_DEFECTO.size():
@@ -43,6 +51,7 @@ func cargar_numeros() -> void:
 ## Guarda los números para que sigan ahí la próxima vez.
 func guardar_numeros() -> void:
 	var cfg := ConfigFile.new()
+	cfg.set_value("numeros", "version", VERSION_NUMEROS)
 	cfg.set_value("numeros", "mios", numeros_mios)
 	cfg.set_value("numeros", "rival", numeros_rival)
 	cfg.save(RUTA_NUMEROS)

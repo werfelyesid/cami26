@@ -97,10 +97,10 @@ const FORMACION := [
 	{"rol": MEDIO, "num": 16, "pos": Vector2(-16.0, 18.0)},
 	{"rol": MEDIO, "num": 12, "pos": Vector2(-30.0, -26.0)},
 	{"rol": MEDIO, "num": 14, "pos": Vector2(-30.0, 26.0)},
-	{"rol": MEDIO, "num": 10, "pos": Vector2(-4.0, 0.0)},
+	{"rol": MEDIO, "num": 17, "pos": Vector2(-4.0, 0.0)},
 	{"rol": DELANTERO, "num": 11, "pos": Vector2(20.0, -30.0)},
-	{"rol": DELANTERO, "num": 7, "pos": Vector2(20.0, 30.0)},
-	{"rol": DELANTERO, "num": 9, "pos": Vector2(26.0, -8.0)},
+	{"rol": DELANTERO, "num": 10, "pos": Vector2(20.0, 30.0)},
+	{"rol": DELANTERO, "num": 7, "pos": Vector2(26.0, -8.0)},
 	{"rol": DELANTERO, "num": 13, "pos": Vector2(26.0, 8.0)},
 ]
 
@@ -285,12 +285,14 @@ func _crear_equipo(equipo: int) -> void:
 			# La dificultad también ajusta la velocidad del rival.
 			f.mult_velocidad = Ajustes.velocidad_rival() / 6.4
 
-		# --- CRISTIANO y MESSI: los dos cracks, con 130 de media ---
+		# --- LAS LEYENDAS: Neymar, Cristiano y Messi, con 130 de media ---
 		if equipo == 0 and i == 14:
 			f.poner_stats_de_crack("CRISTIANO", 7)
 			cristiano = f
-		elif equipo == 1 and i == 11:
+		elif equipo == 0 and i == 13:
 			f.poner_stats_de_crack("MESSI", 10)
+		elif equipo == 0 and i == 12:
+			f.poner_stats_de_crack("NEYMAR", 11)
 
 		# --- Tu equipo usa los números de camiseta que hayas elegido ---
 		if equipo == 0 and i < Ajustes.numeros_mios.size():
@@ -516,7 +518,7 @@ func _fila_numero(f) -> Control:
 	var quien := str(f.nombre)
 	if quien == "":
 		quien = "JUGADOR %d" % int(f.numero)
-	info.text = "%s   ·   %s   ·   MEDIA %d" % [quien, _nombre_rol(int(f.rol)), int(f.media)]
+	info.text = "%s%s   ·   %s   ·   MEDIA %d" % [quien, ("  LEYENDA" if bool(f.crack) else ""), _nombre_rol(int(f.rol)), int(f.media)]
 	fila.add_child(info)
 
 	var menos := Button.new()
@@ -1047,7 +1049,8 @@ func _texto_extra() -> String:
 		var quien := str(controlado.nombre)
 		if quien == "":
 			quien = "JUGADOR %d" % int(controlado.numero)
-		return "MANEJAS: %s  ·  MEDIA %d  ·  CAMBIAR (Q) para otro" % [quien, int(controlado.media)]
+		var leyenda := "  ·  LEYENDA" if bool(controlado.crack) else ""
+		return "MANEJAS: %s%s  ·  MEDIA %d  ·  CAMBIAR (Q) para otro" % [quien, leyenda, int(controlado.media)]
 	return ""
 
 
