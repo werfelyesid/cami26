@@ -148,6 +148,76 @@ func cargar() -> void:
 			else:
 				push_warning("El guardado está dañado; se prueba con la copia de seguridad.")
 	_recuperar_si_hace_falta()
+	# Las leyendas tienen que estar siempre en la plantilla, aunque el guardado
+	# sea viejo (si no, no aparecen en MI PLANTILLA ni en el partido).
+	agregar_leyendas()
+
+
+## Mete a las tres leyendas (Neymar, Cristiano y Messi) en el inventario y en
+## los titulares. Se puede llamar muchas veces: si ya están, no las repite.
+func agregar_leyendas() -> void:
+	var leyendas := [
+		{
+			"nombre": "NEYMAR", "puesto": "EI", "dorsal": 11,
+			"equipo": "Leyendas", "equipo_id": "leyendas",
+			"color1": "#1f7a3a", "color2": "#f2d21b",
+			"ovr": 130, "nivel": "oro", "especial": true, "leyenda": true,
+			"vel": 130, "tir": 130, "pas": 130, "reg": 130, "fis": 130, "res": 130,
+		},
+		{
+			"nombre": "CRISTIANO", "puesto": "DC", "dorsal": 7,
+			"equipo": "Leyendas", "equipo_id": "leyendas",
+			"color1": "#1b2a6b", "color2": "#f2c200",
+			"ovr": 130, "nivel": "oro", "especial": true, "leyenda": true,
+			"vel": 130, "tir": 130, "pas": 130, "reg": 130, "fis": 130, "res": 130,
+		},
+		{
+			"nombre": "MESSI", "puesto": "ED", "dorsal": 10,
+			"equipo": "Leyendas", "equipo_id": "leyendas",
+			"color1": "#7a1f2b", "color2": "#f2c200",
+			"ovr": 130, "nivel": "oro", "especial": true, "leyenda": true,
+			"vel": 130, "tir": 130, "pas": 130, "reg": 130, "fis": 130, "res": 130,
+		},
+	]
+
+	var cambio := false
+
+	# 1) Que estén en el inventario (sin repetirlas).
+	for carta in leyendas:
+		var existe := false
+		for c in inventario:
+			if str(c.get("nombre", "")) == str(carta["nombre"]) and bool(c.get("leyenda", false)):
+				existe = true
+				break
+		if not existe:
+			inventario.append(carta)
+			cambio = true
+
+	# 2) Que estén entre los titulares (si la plantilla está llena, se saca a
+	#    alguien que no sea leyenda).
+	var titulares: Array = plantilla.get("titulares", [])
+	if not (titulares is Array):
+		titulares = []
+	for i in inventario.size():
+		if not bool(inventario[i].get("leyenda", false)):
+			continue
+		if titulares.has(i):
+			continue
+		if titulares.size() >= 11:
+			for j in range(titulares.size() - 1, -1, -1):
+				var indice: int = int(titulares[j])
+				if indice < 0 or indice >= inventario.size():
+					titulares.remove_at(j)
+					break
+				if not bool(inventario[indice].get("leyenda", false)):
+					titulares.remove_at(j)
+					break
+		titulares.append(i)
+		cambio = true
+	plantilla["titulares"] = titulares
+
+	if cambio:
+		guardar()
 
 
 ## Si la partida quedó vacía pero hay una copia con progreso, la recupera sola.

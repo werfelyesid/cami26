@@ -147,7 +147,8 @@ func _ready() -> void:
 	_crear_interfaz()
 	_poner_nombres()
 	hud.poner_colores(_colores[0]["camiseta"], _colores[1]["camiseta"])
-	humano.mostrar_indicador(true, humano.nombre)
+	# Si es leyenda, el nombre ya se ve dorado arriba: no lo repetimos en blanco.
+	humano.mostrar_indicador(true, "" if humano.leyenda else humano.nombre)
 	_saque_de_centro()
 
 
@@ -289,7 +290,7 @@ func _crear_equipo(equipo_id: int) -> void:
 		j.poner_media(media)
 		var es_leyenda := bool(quien.get("leyenda", false))
 		var nombre_leyenda := str(quien.get("nombre", ""))
-		j.poner_leyenda(es_leyenda, "LEYENDA  " + nombre_leyenda if es_leyenda else "")
+		j.poner_leyenda(es_leyenda, nombre_leyenda)
 		if j.rol == Jugador.Rol.ARQUERO:
 			# El arquero se mueve más lento que un jugador de campo: si no, ataja
 			# todo. Con media 90 llega a 4,8 m/s, como uno de verdad.
@@ -1510,5 +1511,5 @@ func _poner_control(nuevo) -> void:
 	nuevo.camara = camara
 	nuevo.tiene_destino = false
 	nuevo.correr = false
-	nuevo.mostrar_indicador(true, nuevo.nombre)
+	nuevo.mostrar_indicador(true, "" if nuevo.leyenda else nuevo.nombre)
 	controlado = nuevo

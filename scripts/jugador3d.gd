@@ -309,9 +309,9 @@ func _armar_indicador() -> void:
 	add_child(_anillo_leyenda)
 
 	_etiqueta_leyenda = Label3D.new()
-	_etiqueta_leyenda.font_size = 72
+	_etiqueta_leyenda.font_size = 96
 	_etiqueta_leyenda.pixel_size = 0.0042
-	_etiqueta_leyenda.position = Vector3(0.0, 2.62, 0.0)
+	_etiqueta_leyenda.position = Vector3(0.0, 2.58, 0.0)
 	_etiqueta_leyenda.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_etiqueta_leyenda.no_depth_test = true
 	_etiqueta_leyenda.outline_size = 12
